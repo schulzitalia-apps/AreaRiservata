@@ -97,7 +97,7 @@ export const ANAGRAFICA_TYPES: readonly PublicTypeDef[] = [
     preview: {
       title: ["ragioneSociale"],
       subtitle: ["tipoCliente"],
-      searchIn: ["ragioneSociale", "indirizzooperativa", "cap", "citta"],
+      searchIn: ["ragioneSociale", "cap", "citta"],
     },
     accettaAule: true,
     detailCard: {
@@ -137,7 +137,7 @@ export const ANAGRAFICA_TYPES: readonly PublicTypeDef[] = [
     preview: {
       title: ["ragioneSociale"],
       subtitle: ["tipoFornitore"],
-      searchIn: ["ragioneSociale", "indirizzooperativa", "cap", "citta"],
+      searchIn: ["ragioneSociale", "cap", "citta"],
     },
     accettaAule: true,
     detailCard: {
