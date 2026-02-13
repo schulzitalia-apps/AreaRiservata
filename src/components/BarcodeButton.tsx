@@ -5,7 +5,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { BrowserMultiFormatReader, IScannerControls } from "@zxing/browser";
 
 // ✅ Redux store
-import { useAppDispatch } from "@/store/hooks";
+import { useAppDispatch } from "@/components/Store/hooks";
 import {
   fetchAnagrafiche,
   fetchAnagrafica,
