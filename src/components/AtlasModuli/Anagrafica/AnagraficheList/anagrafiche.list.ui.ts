@@ -19,7 +19,7 @@ export const ANAGRAFICHE_LIST_UI_BY_SLUG: Partial<
       referencePills: false,
     },
     columns: {
-      mode: "searchIn",
+      mode: "custom",
       // extra colonne oltre al searchIn:
       keys: fk("email", "citta", "nomeAgente", "sedeLegale"),
       showVisibility: true,
@@ -55,12 +55,9 @@ export const ANAGRAFICHE_LIST_UI_BY_SLUG: Partial<
     controls: {
       docType: true,
       visibility: false,
-      sort: true,
+      sort: false,
     },
-    hoverPreview: {
-      title: "Anteprima",
-      keys: fk("note"),
-    },
+    hoverPreview: false
   },
 };
 
