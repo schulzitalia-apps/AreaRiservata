@@ -618,7 +618,7 @@ export const FIELD_CATALOG = {
       type: "text",
       max: 400,
     },
-    indirizzooperativa: {
+    indirizzoOperativo: {
       label: "Indirizzo Sede Operativa",
       type: "text",
       max: 400,
