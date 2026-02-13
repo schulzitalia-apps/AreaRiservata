@@ -12,21 +12,11 @@ import {
   updateAnagrafica as updateAnagraficaThunk,
 } from "@/components/Store/slices/anagraficheSlice";
 
-/**
- * Target: Anagrafica "conferme-ordine"
- */
 const ANAGRAFICA_SLUG = "conferme-ordine";
 
-/**
- * Stati reali (ciclo) + select manuale
- */
 const STATO_VALUES = ["Taglio", "Vetraggio", "Ferramenta", "Imballaggio", "Spedizione"] as const;
 type StatoAvanzamento = (typeof STATO_VALUES)[number];
 
-/**
- * Estrazione numeroOrdine dal barcode
- * - prende le prime 5 cifre e rimuove zeri iniziali -> "12" (stringa)
- */
 function extractNumeroOrdine(barcodeRaw: string): string {
   const raw = (barcodeRaw || "").trim();
   if (!raw) return "";
@@ -38,9 +28,6 @@ function extractNumeroOrdine(barcodeRaw: string): string {
   return normalized === "" ? "0" : normalized;
 }
 
-/**
- * Switch statoAvanzamento (ciclo fisso)
- */
 function computeNextStatoAvanzamento(current: any): StatoAvanzamento {
   const cur = (current == null ? "" : String(current)).trim();
   const idx = STATO_VALUES.indexOf(cur as StatoAvanzamento);
@@ -64,16 +51,13 @@ const BarcodeScannerButton: React.FC = () => {
 
   const [showOverlay, setShowOverlay] = useState(false);
 
-  // Stato “operazione”
   const [execBusy, setExecBusy] = useState(false);
   const [execError, setExecError] = useState<string | null>(null);
 
-  // Record trovato / esito
   const [foundDoc, setFoundDoc] = useState<any | null>(null);
   const [prevStatus, setPrevStatus] = useState<string | null>(null);
   const [nextStatus, setNextStatus] = useState<string | null>(null);
 
-  // Select manuale (se non selezioni nulla, usa "next" ciclico)
   const [selectedStatus, setSelectedStatus] = useState<StatoAvanzamento | "">("");
 
   useEffect(() => {
@@ -86,14 +70,6 @@ const BarcodeScannerButton: React.FC = () => {
     };
   }, []);
 
-  /**
-   * Pipeline (STORE):
-   * - barcode -> numeroOrdine
-   * - LIST con query=numeroOrdine (solo per restringere, senza docType)
-   * - MATCH ESATTO lato FE: doc.data.numeroOrdine === numeroOrdine
-   * - PATCH statoAvanzamento
-   * - READ aggiornato
-   */
   async function executeFlow(barcodeRaw: string) {
     setExecError(null);
     setFoundDoc(null);
@@ -108,13 +84,12 @@ const BarcodeScannerButton: React.FC = () => {
 
     setExecBusy(true);
     try {
-      // 1) LIST (solo query) -> prendo un po' più risultati e filtro ESATTO lato FE
       const listOut = await dispatch(
         fetchAnagrafiche({
           type: ANAGRAFICA_SLUG,
           query: numeroOrdine,
           page: 1,
-          pageSize: 50, // abbastanza per trovare il match anche se query è “larga”
+          pageSize: 50,
           fields: ["numeroOrdine", "codiceCliente", "riferimento", "statoAvanzamento"],
         }),
       ).unwrap();
@@ -124,17 +99,18 @@ const BarcodeScannerButton: React.FC = () => {
         throw new Error(`Nessuna conferma d'ordine trovata (query=${numeroOrdine})`);
       }
 
-      // ✅ MATCH ESATTO: SOLO numeroOrdine uguale
-      const exact = items.find((x: any) => String(x?.data?.numeroOrdine ?? "").trim() === numeroOrdine);
+      const exact = items.find(
+        (x: any) => String(x?.data?.numeroOrdine ?? "").trim() === numeroOrdine,
+      );
 
       if (!exact) {
-        // per debug utile, ma lasciamo messaggio chiaro
         throw new Error(
-          `Trovati ${items.length} risultati con ricerca, ma nessuno con numeroOrdine ESATTO = ${numeroOrdine}`,
+          `Trovati ${items.length} risultati, ma nessuno con numeroOrdine ESATTO = ${numeroOrdine}`,
         );
       }
 
-      const id = String(exact?.id ?? exact?._id ?? "");
+      // ✅ AnagraficaPreview ha SOLO id (niente _id)
+      const id = String(exact.id ?? "");
       if (!id) throw new Error("Record trovato ma senza id");
 
       const current = exact?.data?.statoAvanzamento;
@@ -145,7 +121,6 @@ const BarcodeScannerButton: React.FC = () => {
       setPrevStatus(current == null ? "" : String(current));
       setNextStatus(next);
 
-      // 2) PATCH
       await dispatch(
         updateAnagraficaThunk({
           type: ANAGRAFICA_SLUG,
@@ -154,7 +129,6 @@ const BarcodeScannerButton: React.FC = () => {
         }),
       ).unwrap();
 
-      // 3) READ aggiornato
       const full = await dispatch(fetchAnagrafica({ type: ANAGRAFICA_SLUG, id })).unwrap();
       setFoundDoc(full.data);
 
@@ -270,6 +244,7 @@ const BarcodeScannerButton: React.FC = () => {
       : "bg-gray-5";
 
   const isBusy = isInitializingCamera || isScanning;
+
   const numeroOrdine = result ? extractNumeroOrdine(result) : "";
 
   const overlayActionText =
@@ -433,9 +408,7 @@ const BarcodeScannerButton: React.FC = () => {
       {showOverlay && result && (
         <div className="fixed inset-0 z-999999 flex items-center justify-center bg-green text-white">
           <div className="px-6 text-center">
-            <p className="mb-4 text-[11px] font-mono opacity-80">
-              SLUG: {ANAGRAFICA_SLUG}
-            </p>
+            <p className="mb-4 text-[11px] font-mono opacity-80">SLUG: {ANAGRAFICA_SLUG}</p>
 
             <p className="mb-4 text-heading-5 font-bold tracking-wide">{overlayActionText}</p>
 
