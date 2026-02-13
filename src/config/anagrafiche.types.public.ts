@@ -164,6 +164,7 @@ export const ANAGRAFICA_TYPES: readonly PublicTypeDef[] = [
       "inizioConsegna",
       "fineConsegna",
       "note",
+      "valoreCommessa"
     ],
     documentTypes: ["confermaOrdine"],
     preview: {

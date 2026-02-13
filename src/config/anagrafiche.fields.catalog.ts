@@ -760,6 +760,10 @@ export const FIELD_CATALOG = {
         previewField: "ragioneSociale",
       },
     },
+    valoreCommessa:
+      {label: "Valore Conferma",
+       type: "number"  },
+
     numeroOrdine: {
       label: "Numero Ordine",
       type: "number",
