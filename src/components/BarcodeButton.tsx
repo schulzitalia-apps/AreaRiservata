@@ -18,7 +18,8 @@ type StatoAvanzamento = (typeof STATO_VALUES)[number];
 
 /**
  * 1) Estrazione numeroOrdine dal barcode
- *    - Prende le prime 5 cifre, le rende numeriche e rimuove eventuali zeri iniziali
+ *    - Prende le prime 5 cifre (tra tutte le cifre presenti), le rende numeriche
+ *    - Rimuove eventuali zeri iniziali
  *    - Esempi:
  *        "00012XYZ" -> "12"
  *        "00123"    -> "123"
@@ -28,11 +29,11 @@ function extractNumeroOrdine(barcodeRaw: string): string {
   const raw = (barcodeRaw || "").trim();
   if (!raw) return "";
 
-  // trova le prime 5 cifre (anche se il barcode contiene altro)
+  // prendo SOLO cifre, poi le prime 5
   const digits = raw.replace(/\D/g, "").slice(0, 5);
   if (!digits) return "";
 
-  // rimuove zeri iniziali (ma se sono tutti zeri, torna "0")
+  // tolgo zeri iniziali, ma se è tutto zero torno "0"
   const normalized = digits.replace(/^0+/, "");
   return normalized === "" ? "0" : normalized;
 }
@@ -51,10 +52,14 @@ function computeNextStatoAvanzamento(current: any): StatoAvanzamento {
 
 /**
  * Helpers API
+ *
+ * NOTE: uso matchField/matchValue per match ESATTO su data.<field> (indicizzato),
+ * invece della search "query" che usa regex su preview.searchIn
  */
 async function apiListConfermeOrdineByNumeroOrdine(numeroOrdine: string) {
   const qs = new URLSearchParams();
-  qs.set("query", numeroOrdine);
+  qs.set("matchField", "numeroOrdine");
+  qs.set("matchValue", numeroOrdine);
   qs.set("docType", DOC_TYPE);
   qs.set("page", "1");
   qs.set("pageSize", "1");
@@ -128,8 +133,8 @@ const BarcodeScannerButton: React.FC = () => {
 
   /**
    * Pipeline:
-   * - barcode -> numeroOrdine (prime 5 cifre, numerico, senza zeri iniziali)
-   * - list /api/anagrafiche/conferme-ordine?query=...&docType=confermaOrdine&pageSize=1
+   * - barcode -> numeroOrdine (prime 5 cifre, "12" come stringa)
+   * - GET /api/anagrafiche/conferme-ordine?matchField=numeroOrdine&matchValue=12&docType=confermaOrdine&pageSize=1
    * - se trovato: PATCH statoAvanzamento
    */
   async function executeFlow(barcodeRaw: string) {
@@ -478,9 +483,13 @@ const BarcodeScannerButton: React.FC = () => {
               </p>
             )}
 
-            {execBusy && <p className="mt-3 text-[11px] opacity-80">Aggiornamento in corso…</p>}
+            {execBusy && (
+              <p className="mt-3 text-[11px] opacity-80">Aggiornamento in corso…</p>
+            )}
 
-            {execError && <p className="mt-3 text-[11px] text-red-200">Errore: {execError}</p>}
+            {execError && (
+              <p className="mt-3 text-[11px] text-red-200">Errore: {execError}</p>
+            )}
 
             <p className="mt-4 text-[11px] opacity-80">
               Codice completo: <span className="font-mono break-all">{result}</span>
