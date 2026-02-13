@@ -14,7 +14,7 @@ import {
 
 const ANAGRAFICA_SLUG = "conferme-ordine";
 
-const STATO_VALUES = ["Taglio", "Vetraggio", "Ferramenta", "Imballaggio", "Spedizione"] as const;
+const STATO_VALUES = ["Taglio", "Ferramenta", "Vetraggio", "Imballaggio", "Spedizione"] as const;
 type StatoAvanzamento = (typeof STATO_VALUES)[number];
 
 function extractNumeroOrdine(barcodeRaw: string): string {
