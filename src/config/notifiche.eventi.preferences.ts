@@ -49,12 +49,12 @@ const DEFAULT_PREF: Omit<EventoNotificationPreference, "slug"> = {
   // di default: notificami quando l’evento è vicino (prima)
   base: "startAt",
   mode: "FINESTRA",
-  beforeDays: 2,
+  beforeDays: 4,
 
   // di default non mostro dopo, a meno che tu lo abiliti
-  afterDays: 3,
-  includePast: true,
-  pastDays: 2,
+  afterDays: 4,
+  includePast: false,
+  pastDays: 5,
 
   // evita spam su bozza/annullato
   excludeStatuses: ["bozza", "annullato"],
