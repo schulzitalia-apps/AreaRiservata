@@ -18,11 +18,23 @@ type StatoAvanzamento = (typeof STATO_VALUES)[number];
 
 /**
  * 1) Estrazione numeroOrdine dal barcode
- *    - Caso semplice: barcode == numeroOrdine
- *    - Se il barcode contiene altro, modifica qui (es. split, regex, ecc.)
+ *    - Prende le prime 5 cifre, le rende numeriche e rimuove eventuali zeri iniziali
+ *    - Esempi:
+ *        "00012XYZ" -> "12"
+ *        "00123"    -> "123"
+ *        "12345..." -> "12345"
  */
 function extractNumeroOrdine(barcodeRaw: string): string {
-  return (barcodeRaw || "").trim();
+  const raw = (barcodeRaw || "").trim();
+  if (!raw) return "";
+
+  // trova le prime 5 cifre (anche se il barcode contiene altro)
+  const digits = raw.replace(/\D/g, "").slice(0, 5);
+  if (!digits) return "";
+
+  // rimuove zeri iniziali (ma se sono tutti zeri, torna "0")
+  const normalized = digits.replace(/^0+/, "");
+  return normalized === "" ? "0" : normalized;
 }
 
 /**
@@ -116,7 +128,7 @@ const BarcodeScannerButton: React.FC = () => {
 
   /**
    * Pipeline:
-   * - barcode -> numeroOrdine
+   * - barcode -> numeroOrdine (prime 5 cifre, numerico, senza zeri iniziali)
    * - list /api/anagrafiche/conferme-ordine?query=...&docType=confermaOrdine&pageSize=1
    * - se trovato: PATCH statoAvanzamento
    */
@@ -466,13 +478,9 @@ const BarcodeScannerButton: React.FC = () => {
               </p>
             )}
 
-            {execBusy && (
-              <p className="mt-3 text-[11px] opacity-80">Aggiornamento in corso…</p>
-            )}
+            {execBusy && <p className="mt-3 text-[11px] opacity-80">Aggiornamento in corso…</p>}
 
-            {execError && (
-              <p className="mt-3 text-[11px] text-red-200">Errore: {execError}</p>
-            )}
+            {execError && <p className="mt-3 text-[11px] text-red-200">Errore: {execError}</p>}
 
             <p className="mt-4 text-[11px] opacity-80">
               Codice completo: <span className="font-mono break-all">{result}</span>
