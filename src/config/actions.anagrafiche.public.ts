@@ -278,14 +278,17 @@ export const ANAGRAFICHE_ACTIONS: readonly PublicAnagraficaActionDef[] = [
       "Crea un avviso quando la commessa entra in stato Spedizione.",
 
     anagraficaType: "conferme-ordine",
-    field: "statoAvanzamento",
+    field: "inizioConsegna",
     trigger: "ON_CHANGE",
 
     eventType: "consegna_prevista",
     timeKind: "point",
-    visibility: "SEMPRE",
+    visibility: "FINESTRA",
+    windowDaysBefore: 20,
+    windowDaysAfter: 5,
 
-    timeSource: "now",
+    timeSource: "field",
+
 
     uiTone: "info",
 
