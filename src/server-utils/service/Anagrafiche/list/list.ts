@@ -106,13 +106,39 @@ export async function listAnagrafiche(
   // Nota typing:
   // - buildMongoAccessFilter potrebbe essere tipizzato su mongodb.Filter
   // - qui lo normalizziamo come FilterQuery per Mongoose
-  const accessFilter = buildMongoAccessFilter<IAnagraficaDoc>(auth, slug) as unknown as FilterQuery<IAnagraficaDoc>;
+  const accessFilter = buildMongoAccessFilter<IAnagraficaDoc>(
+    auth,
+    slug,
+  ) as unknown as FilterQuery<IAnagraficaDoc>;
 
   // 4) Combine (Mongoose FilterQuery)
   const filter = combineFilters<IAnagraficaDoc>(
     baseFilter as FilterQuery<IAnagraficaDoc>,
     accessFilter,
   );
+
+  // DEBUG MIRATO:
+  // - solo per conferme-ordine
+  // - solo per query 2970
+  // - stampa i pezzi per vedere se data.numeroOrdine entra davvero nel filtro finale
+  if (slug === "conferme-ordine" && (query ?? "").trim() === "2970") {
+    console.log("[DEBUG conferme-ordine search]", {
+      query: (query ?? "").trim(),
+      searchIn: def?.preview?.searchIn,
+      fieldDefNumeroOrdine: def?.fields?.numeroOrdine,
+      searchFilter,
+      baseFilter,
+      accessFilter,
+      filter,
+    });
+
+    // (extra) stampa stringificata per copiare/incollare in Compass
+    try {
+      console.log("[DEBUG conferme-ordine filter JSON]", JSON.stringify(filter));
+    } catch {
+      // ignore
+    }
+  }
 
   // 5) Projection / Sort / Pagination
   const projection = buildPreviewProjection(def, fields);
