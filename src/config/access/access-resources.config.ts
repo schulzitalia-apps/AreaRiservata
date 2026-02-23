@@ -164,7 +164,7 @@ export const ResourcesConfig: ResourcesConfigMap = {
           roles: ["Super", "Amministrazione", "Commerciale", "Agente"],
         },
         edit: {
-          roles: ["Super", "Amministrazione"],
+          roles: ["Super", "Amministrazione", "Tecnico"],
           ownOnlyRoles: ["Commerciale", "Agente"],
         },
         delete: {
