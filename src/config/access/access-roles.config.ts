@@ -25,6 +25,7 @@ export const RolesConfig: Record<AppRole, RoleConfig> = {
   Tecnico: {
     label: "Tecnico",
     builtIn: false,
+    isAdmin: true,
   },
   Custcare: {
     label: "Custcare",
