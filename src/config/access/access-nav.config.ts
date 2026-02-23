@@ -217,6 +217,7 @@ export const NavItemsAccess: NavItemAccess[] = [
     kind: "static",
     sectionId: "SITE",
     label: "Calendario",
+    roles: ["Super", "Amministrazione", "Cliente", "Agente", "Commerciale", "Custcare" ],
   },
 
   /**
