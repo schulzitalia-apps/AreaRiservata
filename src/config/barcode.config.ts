@@ -38,7 +38,7 @@ export type BarcodeActionConfig = {
 
 export const BARCODE_ACTIONS_CONFIG = [
   {
-    id: "lettura",
+    id: "Lettura",
     label: "Lettura",
     description: "Solo lettura (nessuna operazione).",
     action: { kind: "read_only" },
@@ -46,7 +46,7 @@ export const BARCODE_ACTIONS_CONFIG = [
 
   // ESEMPIO: prime 5 cifre = "commessa"/numeroOrdine, aggiorno statoAvanzamento
   {
-    id: "taglio",
+    id: "Taglio",
     label: "Taglio",
     description: "Imposta lo stato avanzamento a Taglio sulla conferma d'ordine trovata.",
     action: {
@@ -59,7 +59,7 @@ export const BARCODE_ACTIONS_CONFIG = [
     },
   },
   {
-    id: "vetraggio",
+    id: "Vetraggio",
     label: "Vetraggio",
     description: "Imposta lo stato avanzamento a Vetraggio sulla conferma d'ordine trovata.",
     action: {
@@ -72,7 +72,7 @@ export const BARCODE_ACTIONS_CONFIG = [
     },
   },
   {
-    id: "ferramenta",
+    id: "Ferramenta",
     label: "Ferramenta",
     description: "Imposta lo stato avanzamento a Ferramenta sulla conferma d'ordine trovata.",
     action: {
@@ -85,7 +85,7 @@ export const BARCODE_ACTIONS_CONFIG = [
     },
   },
   {
-    id: "imballaggio",
+    id: "Imballaggio",
     label: "Imballaggio",
     description: "Imposta lo stato avanzamento a Imballaggio sulla conferma d'ordine trovata.",
     action: {
@@ -98,7 +98,7 @@ export const BARCODE_ACTIONS_CONFIG = [
     },
   },
   {
-    id: "spedizione",
+    id: "Spedizione",
     label: "Spedizione",
     description: "Imposta lo stato avanzamento a Spedizione sulla conferma d'ordine trovata.",
     action: {
