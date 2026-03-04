@@ -5,7 +5,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { BrowserMultiFormatReader, IScannerControls } from "@zxing/browser";
 
 // ✅ Redux store
-import { useAppDispatch } from "@/components/Store/hooks";
+import { useAppDispatch, useAppSelector } from "@/components/Store/hooks"; // ✅ aggiunto useAppSelector
 import {
   fetchAnagrafiche,
   fetchAnagrafica,
@@ -38,6 +38,18 @@ function computeNextStatoAvanzamento(current: any): StatoAvanzamento {
 const BarcodeScannerButton: React.FC = () => {
   const dispatch = useAppDispatch();
 
+  // ✅ session dal tuo slice
+  const session = useAppSelector((s: any) => s.session) as {
+    status: "loading" | "authenticated" | "unauthenticated";
+    user: { id?: string } | null;
+  };
+
+  // ✅ azione barcode da profilo
+  const [userActionLoading, setUserActionLoading] = useState(false);
+  const [userActionId, setUserActionId] = useState<string | null>(null);
+  const [userActionLabel, setUserActionLabel] = useState<string | null>(null);
+  const [userActionError, setUserActionError] = useState<string | null>(null);
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const readerRef = useRef<BrowserMultiFormatReader | null>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
@@ -60,6 +72,63 @@ const BarcodeScannerButton: React.FC = () => {
 
   const [selectedStatus, setSelectedStatus] = useState<StatoAvanzamento | "">("");
 
+  // ✅ fetch action-by-user/:userId quando ho utente
+  useEffect(() => {
+    const userId = String(session?.user?.id ?? "").trim();
+
+    // reset se non autenticato
+    if (session?.status !== "authenticated" || !userId) {
+      setUserActionId(null);
+      setUserActionLabel(null);
+      setUserActionError(null);
+      setUserActionLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      setUserActionLoading(true);
+      setUserActionError(null);
+
+      try {
+        const res = await fetch(`/api/barcodes/action-by-user/${encodeURIComponent(userId)}`, {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        if (!res.ok) {
+          const j = await res.json().catch(() => null);
+          throw new Error(j?.message ?? `Errore fetch action (${res.status})`);
+        }
+
+        const data = await res.json();
+
+        if (cancelled) return;
+
+        const actionId = data?.actionId ? String(data.actionId).trim() : null;
+        const actionLabel = data?.actionLabel ? String(data.actionLabel) : null;
+
+        setUserActionId(actionId);
+        setUserActionLabel(actionLabel);
+
+        // se ho azione imposta, azzero eventuale scelta manuale rimasta
+        if (actionId) setSelectedStatus("");
+      } catch (e: any) {
+        if (cancelled) return;
+        setUserActionId(null);
+        setUserActionLabel(null);
+        setUserActionError(e?.message ?? "Errore caricando azione utente");
+      } finally {
+        if (!cancelled) setUserActionLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.status, session?.user?.id]);
+
   useEffect(() => {
     return () => {
       if (controlsRef.current) {
@@ -70,11 +139,25 @@ const BarcodeScannerButton: React.FC = () => {
     };
   }, []);
 
+  const hasForcedAction = !!userActionId;
+  const isBlockedNoAction =
+    session?.status === "authenticated" && !userActionLoading && !userActionError && !userActionId;
+
+  // ✅ se non c'è action, blocco anche lo scan (coerente con "opzioni bloccate")
+  const canScan =
+    session?.status === "authenticated" && !userActionLoading && !userActionError && !!userActionId;
+
   async function executeFlow(barcodeRaw: string) {
     setExecError(null);
     setFoundDoc(null);
     setPrevStatus(null);
     setNextStatus(null);
+
+    // ✅ se non ho azione configurata, blocco il flusso
+    if (!userActionId) {
+      setExecError("Azione barcode non configurata per l’utente. Operazione bloccata.");
+      return;
+    }
 
     const numeroOrdine = extractNumeroOrdine(barcodeRaw);
     if (!numeroOrdine) {
@@ -115,7 +198,20 @@ const BarcodeScannerButton: React.FC = () => {
 
       const current = exact?.data?.statoAvanzamento;
       const nextAuto = computeNextStatoAvanzamento(current);
-      const next: StatoAvanzamento = (selectedStatus || nextAuto) as StatoAvanzamento;
+
+      // ✅ PRIORITÀ:
+      // 1) actionId dell'utente loggato (forzato)
+      // 2) selectedStatus (manuale) (rimane come fallback se mai in futuro lo riabiliti)
+      // 3) ciclo automatico
+      const forcedNext = STATO_VALUES.includes(userActionId as any)
+        ? (userActionId as StatoAvanzamento)
+        : null;
+
+      if (!forcedNext) {
+        throw new Error(`actionId profilo non mappato a StatoAvanzamento: ${userActionId}`);
+      }
+
+      const next: StatoAvanzamento = (forcedNext || selectedStatus || nextAuto) as StatoAvanzamento;
 
       setFoundDoc(exact);
       setPrevStatus(current == null ? "" : String(current));
@@ -247,8 +343,9 @@ const BarcodeScannerButton: React.FC = () => {
 
   const numeroOrdine = result ? extractNumeroOrdine(result) : "";
 
-  const overlayActionText =
-    selectedStatus
+  const overlayActionText = hasForcedAction
+    ? `CONFERME ORDINE → set statoAvanzamento = ${userActionLabel ?? userActionId}`
+    : selectedStatus
       ? `CONFERME ORDINE → set statoAvanzamento = ${selectedStatus}`
       : `CONFERME ORDINE → switch statoAvanzamento (ciclo)`;
 
@@ -263,7 +360,9 @@ const BarcodeScannerButton: React.FC = () => {
           <div className="relative mt-2 overflow-hidden rounded-xl border border-gray-3 bg-dark-4 shadow-card-6 dark:border-dark-3 dark:bg-dark-2">
             <div className="flex items-center justify-between border-b border-gray-3 px-4 py-2 text-xs font-medium text-gray-7 dark:border-dark-3 dark:text-dark-6">
               <span>Anteprima fotocamera</span>
-              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] ${statusClasses}`}>
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] ${statusClasses}`}
+              >
                 <span className={`h-1.5 w-1.5 rounded-full ${statusDotClasses}`} />
                 {statusLabel}
               </span>
@@ -286,10 +385,14 @@ const BarcodeScannerButton: React.FC = () => {
             <button
               type="button"
               onClick={startScan}
-              disabled={isBusy}
+              disabled={isBusy || !canScan}
               className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-2 transition hover:bg-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-gray-2 disabled:cursor-not-allowed disabled:opacity-65 dark:focus-visible:ring-offset-dark"
             >
-              {mainButtonLabel}
+              {userActionLoading
+                ? "Carico profilo..."
+                : !canScan
+                  ? "Azione non configurata"
+                  : mainButtonLabel}
             </button>
 
             <button
@@ -304,7 +407,7 @@ const BarcodeScannerButton: React.FC = () => {
             <button
               type="button"
               onClick={handleNewScan}
-              disabled={isBusy}
+              disabled={isBusy || !canScan}
               className="inline-flex items-center justify-center rounded-lg border border-transparent bg-gray-2 px-4 py-2 text-xs font-medium text-gray-7 transition hover:border-primary hover:bg-gray-3 hover:text-primary disabled:cursor-not-allowed disabled:opacity-65 dark:bg-dark-2 dark:text-dark-6 dark:hover:border-primary dark:hover:bg-dark-3"
             >
               Nuova lettura
@@ -315,20 +418,40 @@ const BarcodeScannerButton: React.FC = () => {
                 Stato:
               </span>
 
-              <select
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value as any)}
-                className="h-9 rounded-lg border border-gray-5 bg-white px-3 text-sm text-gray-7 shadow-card-8 transition focus:outline-none focus:ring-2 focus:ring-primary dark:border-dark-3 dark:bg-dark-2 dark:text-dark-6"
-              >
-                <option value="">Auto (ciclo)</option>
-                {STATO_VALUES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
+              {hasForcedAction ? (
+                <div className="inline-flex h-9 items-center rounded-lg border border-gray-5 bg-white px-3 text-sm text-gray-7 shadow-card-8 dark:border-dark-3 dark:bg-dark-2 dark:text-dark-6">
+                  Imposto da profilo:{" "}
+                  <span className="ml-2 font-semibold">{userActionLabel ?? userActionId}</span>
+                </div>
+              ) : (
+                <select
+                  value={selectedStatus}
+                  onChange={(e) => setSelectedStatus(e.target.value as any)}
+                  disabled={true}
+                  className="h-9 rounded-lg border border-gray-5 bg-white px-3 text-sm text-gray-7 shadow-card-8 transition focus:outline-none focus:ring-2 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60 dark:border-dark-3 dark:bg-dark-2 dark:text-dark-6"
+                >
+                  <option value="">Auto (ciclo)</option>
+                  {STATO_VALUES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
+
+          {isBlockedNoAction && (
+            <div className="mt-2 rounded-xl border border-yellow-light-3 bg-yellow-light-4 px-4 py-3 text-sm text-yellow-dark shadow-card-6">
+              Il tuo utente non ha un’azione barcode configurata: operazione bloccata.
+            </div>
+          )}
+
+          {userActionError && (
+            <div className="mt-2 rounded-xl border border-red-light-3 bg-red-light-5 px-4 py-3 text-sm text-red-dark shadow-card-6">
+              Errore caricando profilo barcode: {userActionError}
+            </div>
+          )}
 
           {isBusy && (
             <div className="relative mt-2 h-10 w-full overflow-hidden rounded-xl bg-green-light-7/40 ring-1 ring-green-light-3 shadow-card-6 dark:bg-green-light-6/40">
@@ -372,7 +495,8 @@ const BarcodeScannerButton: React.FC = () => {
               {foundDoc && (
                 <div className="mt-2 rounded-lg bg-white/60 px-3 py-2 text-[12px] text-dark shadow-card-8 dark:bg-dark-3/50 dark:text-white">
                   <div className="flex flex-wrap gap-x-4 gap-y-1">
-                    <span className="font-semibold">Cliente:</span> <span>{previewCliente || "—"}</span>
+                    <span className="font-semibold">Cliente:</span>{" "}
+                    <span>{previewCliente || "—"}</span>
                     <span className="font-semibold">Rif:</span> <span>{previewRif || "—"}</span>
                   </div>
 
