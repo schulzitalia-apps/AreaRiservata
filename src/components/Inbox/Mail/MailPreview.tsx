@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/server-utils/lib/utils";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 
 type Props = {
   templateKey: string;
@@ -27,13 +27,6 @@ export default function MailPreview({
                                       disabled,
                                     }: Props) {
   const hasPreview = !!subject || !!bodyText;
-
-  const [localSubject, setLocalSubject] = useState(subject || "");
-  const [localBody, setLocalBody] = useState(bodyText || "");
-
-  // keep in sync quando cambiano da fuori (auto/generata)
-  useEffect(() => setLocalSubject(subject || ""), [subject]);
-  useEffect(() => setLocalBody(bodyText || ""), [bodyText]);
 
   const disabledFinal = !!disabled;
 
@@ -66,13 +59,9 @@ export default function MailPreview({
             <div className="text-[11px] font-semibold text-dark/70 dark:text-white/70">Oggetto</div>
 
             <input
-              value={localSubject}
+              value={subject || ""}
               disabled={disabledFinal}
-              onChange={(e) => {
-                const v = e.target.value;
-                setLocalSubject(v);
-                onChangeSubject(v);
-              }}
+              onChange={(e) => onChangeSubject(e.target.value)}
               className={cn(
                 "mt-2 w-full rounded-xl border border-stroke bg-transparent px-3 py-2 text-sm text-dark outline-none focus:border-primary",
                 "dark:border-dark-3 dark:text-white",
@@ -91,13 +80,9 @@ export default function MailPreview({
             </div>
 
             <textarea
-              value={localBody}
+              value={bodyText || ""}
               disabled={disabledFinal}
-              onChange={(e) => {
-                const v = e.target.value;
-                setLocalBody(v);
-                onChangeBodyText(v);
-              }}
+              onChange={(e) => onChangeBodyText(e.target.value)}
               className={cn(
                 "min-h-[220px] w-full rounded-xl border border-stroke bg-transparent px-3 py-2 text-[13px] leading-6 text-dark outline-none focus:border-primary",
                 "dark:border-dark-3 dark:text-white",

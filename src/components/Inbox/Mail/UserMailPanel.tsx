@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/server-utils/lib/utils";
 
@@ -266,6 +266,12 @@ export default function UserMailPanel() {
   const [draftMode, setDraftMode] = useState<DraftMode>("auto");
   const [draft, setDraft] = useState<Draft>({ subject: "", html: "", bodyText: "" });
 
+  // ✅ NEW: ref per avere sempre l'ultima bozza al click "Invia"
+  const draftRef = useRef(draft);
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+
   const [composing, setComposing] = useState(false);
 
   const selectedTemplate = useMemo(
@@ -450,8 +456,9 @@ export default function UserMailPanel() {
     const finalSenderId = (senderIdentityId || defaultSenderIdentityId || fallbackFirst).trim();
     if (!finalSenderId) return setAvviso({ tipo: "errore", testo: "Manca un mittente configurato." });
 
-    const subjectToSend = (draft.subject || "").trim();
-    const htmlToSend = (draft.html || "").trim();
+    // ✅ usa SEMPRE l'ultima bozza (anche se hai cliccato Invio subito dopo una digitazione)
+    const subjectToSend = (draftRef.current.subject || "").trim();
+    const htmlToSend = (draftRef.current.html || "").trim();
 
     if (!subjectToSend && !htmlToSend) {
       return setAvviso({ tipo: "errore", testo: "La bozza è vuota: genera o scrivi il contenuto prima di inviare." });
