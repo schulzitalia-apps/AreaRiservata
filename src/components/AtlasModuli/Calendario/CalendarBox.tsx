@@ -26,6 +26,13 @@ import type { AnagraficaPreview } from "@/components/Store/models/anagrafiche";
 import { TYPE_COLOR_PALETTE } from "@/components/AtlasModuli/Calendario/color-palette";
 import { CALENDAR_CONFIG } from "@/config/calendar.config";
 
+// ✅ PERMESSI
+import type { AppRole } from "@/types/roles";
+import {
+  ResourcesConfig,
+  type CrudAction,
+} from "@/config/access/access-resources.config";
+
 /* -------------------------------------------------------------------------- */
 /*                               HELPERS                                      */
 /* -------------------------------------------------------------------------- */
@@ -172,13 +179,35 @@ type CalendarBoxProps = {
 /*                              COMPONENTE                                    */
 /* -------------------------------------------------------------------------- */
 
-export default function CalendarBox({ aulaScope, anagraficaScope }: CalendarBoxProps) {
+export default function CalendarBox({
+                                      aulaScope,
+                                      anagraficaScope,
+                                    }: CalendarBoxProps) {
   const dispatch = useAppDispatch();
   const eventiByType = useAppSelector((s) => s.eventi.byType);
 
   const isAulaMode = !!aulaScope;
   const isAnagraficaMode = !!anagraficaScope;
   const selectionModeEnabled = CALENDAR_CONFIG.features.selectionMode;
+
+  // ✅ session role (come nel Sidebar)
+  const role = useAppSelector(
+    (s) => (s.session.user?.role as AppRole | null) ?? null,
+  );
+
+  const userRoles = useMemo<AppRole[]>(() => (role ? [role] : []), [role]);
+
+  const canEventoAction = useMemo(() => {
+    return (typeSlug: string, action: CrudAction) => {
+      const cfg = (ResourcesConfig.evento as any)?.[typeSlug];
+      const rule = cfg?.actions?.[action];
+      if (!rule) return false;
+
+      const allowed: AppRole[] = (rule.roles ?? []) as AppRole[];
+      // Nota: ownOnlyRoles non valutato qui (mancano info owner nel payload/menu)
+      return allowed.some((r) => userRoles.includes(r));
+    };
+  }, [userRoles]);
 
   /* --------------------------------- TIPI ---------------------------------- */
 
@@ -338,9 +367,28 @@ export default function CalendarBox({ aulaScope, anagraficaScope }: CalendarBoxP
 
   const defaultTypeSlug = selectedTypeSlugs[0] ?? allEventDefs[0]?.slug ?? "";
 
+  // ✅ permessi menu (calcolati da ResourcesConfig + role)
+  const canCreateFromCtx = useMemo(() => {
+    if (!defaultTypeSlug) return false;
+    return canEventoAction(defaultTypeSlug, "create");
+  }, [defaultTypeSlug, canEventoAction]);
+
+  const canViewFromCtx = useMemo(() => {
+    const ts = (ctxPayload as any)?.typeSlug as string | undefined;
+    if (!ts) return false;
+    return canEventoAction(ts, "view");
+  }, [ctxPayload, canEventoAction]);
+
+  const canDeleteFromCtx = useMemo(() => {
+    const ts = (ctxPayload as any)?.typeSlug as string | undefined;
+    if (!ts) return false;
+    return canEventoAction(ts, "delete");
+  }, [ctxPayload, canEventoAction]);
+
   const handleCreateNewFromCtx = () => {
     if (!ctxPayload) return;
     if (!defaultTypeSlug) return;
+    if (!canCreateFromCtx) return;
 
     const baseRange = {
       dateStart: ctxPayload.isoDate,
@@ -366,6 +414,7 @@ export default function CalendarBox({ aulaScope, anagraficaScope }: CalendarBoxP
 
   const handleDeleteFromCtx = async (eventId: string, typeSlug: string) => {
     if (!eventId || !typeSlug) return;
+    if (!canEventoAction(typeSlug, "delete")) return;
 
     await dispatch(deleteEvento({ type: typeSlug, id: eventId }) as any);
 
@@ -447,7 +496,13 @@ export default function CalendarBox({ aulaScope, anagraficaScope }: CalendarBoxP
   /* -------------------------------------------------------------------------- */
 
   return (
-    <div ref={hostRef} className={cn("relative overflow-hidden transition-all", "rounded-[10px] bg-transparent")}>
+    <div
+      ref={hostRef}
+      className={cn(
+        "relative overflow-hidden transition-all",
+        "rounded-[10px] bg-transparent",
+      )}
+    >
       <div className="relative rounded-[14px] bg-white p-3 shadow-1 dark:bg-gray-dark dark:shadow-card">
         {/* FILTRI TIPI EVENTO */}
         <div className="mb-3 flex flex-wrap gap-2">
@@ -486,14 +541,15 @@ export default function CalendarBox({ aulaScope, anagraficaScope }: CalendarBoxP
           onNextMonth={() => stepMonth(1)}
           createMode={createMode && selectionModeEnabled}
           onToggleCreate={selectionModeEnabled ? setCreateMode : undefined}
-          onCreateRange={(r) =>
+          onCreateRange={(r) => {
+            if (!canCreateFromCtx) return;
             setPendingForm({
               range: r,
               typeSlug: defaultTypeSlug,
               forAula: isAulaMode ? true : false,
               forAnagrafica: isAnagraficaMode ? true : false,
-            })
-          }
+            });
+          }}
           onDayMenu={(e, iso) => openMenuDay(e, iso)}
           onEventMenu={(e, iso, ev) => openMenuEvent(e, iso, ev.id, ev.typeSlug)}
           typeColorMap={typeColorMap}
@@ -528,7 +584,9 @@ export default function CalendarBox({ aulaScope, anagraficaScope }: CalendarBoxP
               aulaId={aulaScope!.gruppoId}
               aulaLabel={aulaScope!.aulaLabel}
               partecipantiAula={aulaScope!.partecipantiAula}
-              partecipanteAnagraficaType={aulaScope!.partecipanteAnagraficaType}
+              partecipanteAnagraficaType={
+                aulaScope!.partecipanteAnagraficaType
+              }
               availableTypes={allEventDefs}
               typeSlug={pendingForm.typeSlug}
               range={pendingForm.range}
@@ -603,6 +661,9 @@ export default function CalendarBox({ aulaScope, anagraficaScope }: CalendarBoxP
               onCreateNew={handleCreateNewFromCtx}
               onDeleteEvent={handleDeleteFromCtx}
               onSwitchView={handleSwitchView}
+              canCreate={canCreateFromCtx}
+              canView={canViewFromCtx}
+              canDelete={canDeleteFromCtx}
             />
           ))}
       </div>

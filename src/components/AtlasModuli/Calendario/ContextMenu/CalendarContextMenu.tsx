@@ -39,6 +39,11 @@ type Props = {
   onDeleteEvent: (eventId: string, typeSlug: string) => void;
 
   onSwitchView: () => void;
+
+  /** permessi (calcolati fuori, es. da ResourcesConfig + ruolo sessione) */
+  canCreate?: boolean;
+  canView?: boolean;
+  canDelete?: boolean;
 };
 
 export default function CalendarContextMenu({
@@ -51,6 +56,9 @@ export default function CalendarContextMenu({
                                               onCreateNew,
                                               onDeleteEvent,
                                               onSwitchView,
+                                              canCreate = true,
+                                              canView = true,
+                                              canDelete = true,
                                             }: Props) {
   // ✅ HOOKS SEMPRE CHIAMATI
   const menuRef = useRef<HTMLDivElement>(null);
@@ -140,6 +148,10 @@ export default function CalendarContextMenu({
 
   const createSuffix = payload.kind === "hour" ? "(in quest'ora)" : "(qui)";
 
+  const canOpenEvent = isEvent && canView;
+  const canDeleteEvent =
+    isEvent && !!payload.eventId && !!payload.typeSlug && canDelete;
+
   return (
     <div
       className="fixed inset-0 z-[999]"
@@ -201,8 +213,11 @@ export default function CalendarContextMenu({
           className={cn(
             "block w-full rounded-lg px-3 py-2 text-left text-sm transition",
             "hover:bg-black/5 dark:hover:bg-white/10",
+            !canCreate &&
+            "cursor-not-allowed opacity-50 hover:bg-transparent dark:hover:bg-transparent",
           )}
           onClick={() => {
+            if (!canCreate) return;
             onCreateNew();
             onClose();
           }}
@@ -219,11 +234,11 @@ export default function CalendarContextMenu({
           className={cn(
             "block w-full rounded-lg px-3 py-2 text-left transition",
             "hover:bg-black/5 dark:hover:bg-white/10",
-            !isEvent &&
+            !canOpenEvent &&
             "cursor-not-allowed opacity-50 hover:bg-transparent dark:hover:bg-transparent",
           )}
           onClick={() => {
-            if (!isEvent) return;
+            if (!canOpenEvent) return;
             handleViewEvent();
             onClose();
           }}
@@ -238,12 +253,12 @@ export default function CalendarContextMenu({
             "block w-full rounded-lg px-3 py-2 text-left transition",
             "hover:bg-red-500/10 dark:hover:bg-red-500/15",
             "text-red-700 dark:text-red-300",
-            (!isEvent || !payload.eventId || !payload.typeSlug) &&
+            !canDeleteEvent &&
             "cursor-not-allowed opacity-50 hover:bg-transparent dark:hover:bg-transparent",
           )}
           onClick={() => {
-            if (!isEvent || !payload.eventId || !payload.typeSlug) return;
-            onDeleteEvent(payload.eventId, payload.typeSlug);
+            if (!canDeleteEvent) return;
+            onDeleteEvent(payload.eventId!, payload.typeSlug!);
             onClose();
           }}
           role="menuitem"
