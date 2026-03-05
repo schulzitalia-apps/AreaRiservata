@@ -15,6 +15,9 @@ import notificheReducer from "@/components/Store/slices/notificheSlice";
 import statsReducer from "./slices/statsSlice";
 import financialsReducer from "@/components/Store/slices/financialsSlice";
 
+// ✅ NEW: conferme-ordine analytics slice
+import confermeOrdineAnalyticsReducer from "@/components/Store/slices/confermeOrdineAnalyticsSlice";
+
 // ✅ NEW: ui slice
 import uiReducer, { pendingInc, pendingDec } from "@/components/Store/slices/uiSlice";
 
@@ -50,6 +53,9 @@ export const makeStore = () =>
       notifiche: notificheReducer,
       stats: statsReducer,
       financials: financialsReducer,
+
+      // ✅ NEW
+      confermeOrdineAnalytics: confermeOrdineAnalyticsReducer,
 
       // ✅ NEW
       ui: uiReducer,
