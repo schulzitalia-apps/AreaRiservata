@@ -94,7 +94,7 @@ export const ANAGRAFICHE_ACTIONS: readonly PublicAnagraficaActionDef[] = [
 
     anagraficaType: "conferme-ordine",
     field: "inizioConsegna",
-    trigger: "ON_SAVE",
+    trigger: "ON_CHANGE",
 
     eventType: "avvisi_pronto",
     timeKind: "deadline",

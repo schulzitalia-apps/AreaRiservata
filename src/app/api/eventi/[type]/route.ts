@@ -54,9 +54,9 @@ export async function GET(
   const page =
     Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : 1;
 
-  const pageSizeRaw = Number(searchParams.get("pageSize") || "150");
+  const pageSizeRaw = Number(searchParams.get("pageSize") || "200");
   const pageSize =
-    Number.isFinite(pageSizeRaw) && pageSizeRaw > 0 ? pageSizeRaw : 150;
+    Number.isFinite(pageSizeRaw) && pageSizeRaw > 0 ? pageSizeRaw : 200;
 
   const { items, total } = await listEventi({
     type,
