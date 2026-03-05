@@ -150,7 +150,19 @@ export async function getConfermeOrdineAnalytics(params: {
 
   const addFieldsStage: PipelineStage.AddFields = {
     $addFields: {
-      __variantIdRaw: { $toString: { $ifNull: ["$data.variantId", ""] } },
+      /**
+       * ✅ CHIAVE "CATEGORIA" = CLIENTE
+       * Usiamo codiceCliente come key (ObjectId/string).
+       * Fallback su codiceCliente._id per casi sporchi.
+       */
+      __variantIdRaw: {
+        $toString: {
+          $ifNull: [
+            "$data.codiceCliente",
+            { $ifNull: ["$data.codiceCliente._id", ""] },
+          ],
+        },
+      },
 
       __stato: {
         $let: {
@@ -169,7 +181,14 @@ export async function getConfermeOrdineAnalytics(params: {
       __valore: { $round: [TO_DOUBLE_SAFE({ $ifNull: ["$data.valoreCommessa", 0] }), 0] },
 
       __riferimento: { $toString: { $ifNull: ["$data.riferimento", ""] } },
-      __codiceCliente: { $toString: { $ifNull: ["$data.codiceCliente", ""] } },
+      __codiceCliente: {
+        $toString: {
+          $ifNull: [
+            "$data.codiceCliente",
+            { $ifNull: ["$data.codiceCliente._id", ""] },
+          ],
+        },
+      },
       __numeroOrdine: { $toString: { $ifNull: ["$data.numeroOrdine", ""] } },
     },
   };
@@ -314,7 +333,7 @@ export async function getConfermeOrdineAnalytics(params: {
           { $sort: { variantId: 1 } },
         ],
 
-        // TOP by value: più grandi (nel range o globali? qui: globali visibili)
+        // TOP by value: più grandi (globali visibili)
         topValue: [
           { $sort: { __valore: -1, updatedAt: -1 } },
           {
