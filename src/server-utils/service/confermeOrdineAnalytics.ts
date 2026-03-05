@@ -15,13 +15,13 @@ export type ValueSums = {
 
 export type MonthRow = {
   month: string; // "YYYY-MM"
-  byVariantId: Record<string, ValueSums>;
+  byVariantId: Record<string, ValueSums>; // ✅ ora key = ragioneSociale (fallback id)
   totals: ValueSums;
 };
 
 export type TopOrderItem = {
   id: string;
-  variantId: string;
+  variantId: string; // ✅ ragioneSociale (fallback id)
 
   riferimento: string;
   codiceCliente: string | null;
@@ -30,8 +30,8 @@ export type TopOrderItem = {
   statoAvanzamento: StatoAvanzamento;
 
   inizioConsegna: string | null; // ISO
-  fineConsegna: string | null;   // ISO
-  effectiveDate: string | null;  // ISO (fine > inizio)
+  fineConsegna: string | null; // ISO
+  effectiveDate: string | null; // ISO
 
   valore: number; // valoreCommessa
 };
@@ -39,12 +39,11 @@ export type TopOrderItem = {
 export type ConfermeOrdineAnalyticsResponse = {
   range: {
     startMonth: string; // "YYYY-MM"
-    endMonth: string;   // "YYYY-MM"
+    endMonth: string; // "YYYY-MM"
     monthsBack: number;
   };
   variantIds: string[];
   months: MonthRow[];
-
   top: {
     recent: Record<string, TopOrderItem[]>;
     upcoming: Record<string, TopOrderItem[]>;
@@ -139,6 +138,11 @@ export async function getConfermeOrdineAnalytics(params: {
   const Model =
     getAnagraficaModel("conferme-ordine") as unknown as mongoose.Model<IAnagraficaDoc>;
 
+  // ✅ model clienti per ricavare il nome collection reale
+  const ClientsModel =
+    getAnagraficaModel("clienti") as unknown as mongoose.Model<IAnagraficaDoc>;
+  const clientiCollection = ClientsModel.collection.name;
+
   const { start, endNext, startMonth, endMonth } = buildMonthRange(monthsBack);
   const visibleFilter = buildVisibleFilter(auth);
 
@@ -148,19 +152,34 @@ export async function getConfermeOrdineAnalytics(params: {
   );
   const futureEnd = addMonthsUTC(startOfMonthUTC(now), 12);
 
-  const addFieldsStage: PipelineStage.AddFields = {
+  /**
+   * Stage 1: campi base (id cliente + date + valore + titolo)
+   * NOTA: qui NON definiamo ancora __variantId definitivo, perché dipende dal lookup cliente.
+   */
+  const addFieldsStage1: PipelineStage.AddFields = {
     $addFields: {
-      /**
-       * ✅ CHIAVE "CATEGORIA" = CLIENTE
-       * Usiamo codiceCliente come key (ObjectId/string).
-       * Fallback su codiceCliente._id per casi sporchi.
-       */
-      __variantIdRaw: {
+      // id cliente string (fallback su ._id)
+      __clienteIdStr: {
         $toString: {
           $ifNull: [
             "$data.codiceCliente",
             { $ifNull: ["$data.codiceCliente._id", ""] },
           ],
+        },
+      },
+
+      // oggetto ObjectId per lookup
+      __clienteObjId: {
+        $convert: {
+          input: {
+            $ifNull: [
+              "$data.codiceCliente",
+              { $ifNull: ["$data.codiceCliente._id", null] },
+            ],
+          },
+          to: "objectId",
+          onError: null,
+          onNull: null,
         },
       },
 
@@ -193,22 +212,11 @@ export async function getConfermeOrdineAnalytics(params: {
     },
   };
 
-  const addVariantAndEffectiveStage: PipelineStage.AddFields = {
+  /**
+   * effectiveDate + futureDate
+   */
+  const addEffectiveStage: PipelineStage.AddFields = {
     $addFields: {
-      __variantId: {
-        $cond: [
-          { $or: [{ $eq: ["$__variantIdRaw", ""] }, { $eq: ["$__variantIdRaw", null] }] },
-          "unclassified",
-          "$__variantIdRaw",
-        ],
-      },
-
-      /**
-       * effectiveDate (conferme-ordine):
-       * - se fineConsegna nel range => fine
-       * - else se inizioConsegna nel range => inizio
-       * - else null
-       */
       __effectiveDate: {
         $cond: [
           {
@@ -235,10 +243,6 @@ export async function getConfermeOrdineAnalytics(params: {
         ],
       },
 
-      /**
-       * futureDate (upcoming):
-       * - preferisci inizio, fallback fine
-       */
       __futureDate: { $ifNull: ["$__inizio", "$__fine"] },
     },
   };
@@ -247,13 +251,77 @@ export async function getConfermeOrdineAnalytics(params: {
     $match: { $and: [visibleFilter as any] } as any,
   };
 
+  /**
+   * Lookup cliente -> prende ragioneSociale
+   */
+  const lookupClienteStage: PipelineStage.Lookup = {
+    $lookup: {
+      from: clientiCollection,
+      localField: "__clienteObjId",
+      foreignField: "_id",
+      as: "__clienteDoc",
+    },
+  };
+
+  /**
+   * Stage 2: calcola label + chiave finale (ragioneSociale se presente, altrimenti id)
+   * ✅ qui avviene la "sostituzione" che vuoi tu (e quindi FE non cambia)
+   */
+  const addVariantKeyStage: PipelineStage.AddFields = {
+    $addFields: {
+      __clienteLabel: {
+        $let: {
+          vars: { c: { $arrayElemAt: ["$__clienteDoc", 0] } },
+          in: {
+            $toString: { $ifNull: ["$$c.data.ragioneSociale", ""] },
+          },
+        },
+      },
+
+      __variantId: {
+        $let: {
+          vars: {
+            lbl: {
+              $toString: {
+                $ifNull: [
+                  {
+                    $let: {
+                      vars: { c: { $arrayElemAt: ["$__clienteDoc", 0] } },
+                      in: { $ifNull: ["$$c.data.ragioneSociale", ""] },
+                    },
+                  },
+                  "",
+                ],
+              },
+            },
+            id: { $toString: { $ifNull: ["$__clienteIdStr", ""] } },
+          },
+          in: {
+            $cond: [
+              { $and: [{ $ne: ["$$lbl", ""] }, { $ne: ["$$lbl", null] }] },
+              "$$lbl",
+              {
+                $cond: [
+                  { $and: [{ $ne: ["$$id", ""] }, { $ne: ["$$id", null] }] },
+                  "$$id",
+                  "unclassified",
+                ],
+              },
+            ],
+          },
+        },
+      },
+    },
+  };
+
   const pipeline: PipelineStage[] = [
-    addFieldsStage,
-    addVariantAndEffectiveStage,
+    addFieldsStage1,
+    addEffectiveStage,
     baseMatchStage,
+    lookupClienteStage,
+    addVariantKeyStage,
     {
       $facet: {
-        // MONTHLY: record che hanno effectiveDate nel range
         monthsAgg: [
           { $match: { __effectiveDate: { $ne: null } } as any },
           { $addFields: { __month: { $dateToString: { format: "%Y-%m", date: "$__effectiveDate" } } } },
@@ -281,7 +349,6 @@ export async function getConfermeOrdineAnalytics(params: {
           { $project: { _id: 0, variantId: "$_id" } },
         ],
 
-        // TOP recent: ordini con effectiveDate nel range, più recenti
         topRecent: [
           { $match: { __effectiveDate: { $ne: null } } as any },
           { $sort: { __effectiveDate: -1, updatedAt: -1 } },
@@ -307,7 +374,6 @@ export async function getConfermeOrdineAnalytics(params: {
           { $sort: { variantId: 1 } },
         ],
 
-        // TOP upcoming: prossimi 12 mesi (in base a __futureDate)
         topUpcoming: [
           { $match: { __futureDate: { $ne: null, $gte: futureStart, $lt: futureEnd } } as any },
           { $sort: { __futureDate: 1, updatedAt: -1 } },
@@ -333,7 +399,6 @@ export async function getConfermeOrdineAnalytics(params: {
           { $sort: { variantId: 1 } },
         ],
 
-        // TOP by value: più grandi (globali visibili)
         topValue: [
           { $sort: { __valore: -1, updatedAt: -1 } },
           {
