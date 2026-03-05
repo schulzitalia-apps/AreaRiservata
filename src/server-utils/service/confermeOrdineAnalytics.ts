@@ -15,7 +15,7 @@ export type ValueSums = {
 
 export type MonthRow = {
   month: string; // "YYYY-MM"
-  byVariantId: Record<string, ValueSums>; // ✅ ora key = ragioneSociale (fallback id)
+  byVariantId: Record<string, ValueSums>; // ✅ key = ragioneSociale (fallback id)
   totals: ValueSums;
 };
 
@@ -31,7 +31,7 @@ export type TopOrderItem = {
 
   inizioConsegna: string | null; // ISO
   fineConsegna: string | null; // ISO
-  effectiveDate: string | null; // ISO
+  effectiveDate: string | null; // ISO (qui usato per upcoming / info)
 
   valore: number; // valoreCommessa
 };
@@ -158,6 +158,9 @@ export async function getConfermeOrdineAnalytics(params: {
    */
   const addFieldsStage1: PipelineStage.AddFields = {
     $addFields: {
+      // ✅ data “ordine” = createdAt (quella che vuoi per i grafici periodici)
+      __orderDate: "$createdAt",
+
       // id cliente string (fallback su ._id)
       __clienteIdStr: {
         $toString: {
@@ -213,35 +216,13 @@ export async function getConfermeOrdineAnalytics(params: {
   };
 
   /**
-   * effectiveDate + futureDate
+   * futureDate (upcoming) + (optional) effectiveDate info
+   * - upcoming: preferisci inizio, fallback fine
    */
-  const addEffectiveStage: PipelineStage.AddFields = {
+  const addDatesStage: PipelineStage.AddFields = {
     $addFields: {
-      __effectiveDate: {
-        $cond: [
-          {
-            $and: [
-              { $ne: ["$__fine", null] },
-              { $gte: ["$__fine", start] },
-              { $lt: ["$__fine", endNext] },
-            ],
-          },
-          "$__fine",
-          {
-            $cond: [
-              {
-                $and: [
-                  { $ne: ["$__inizio", null] },
-                  { $gte: ["$__inizio", start] },
-                  { $lt: ["$__inizio", endNext] },
-                ],
-              },
-              "$__inizio",
-              null,
-            ],
-          },
-        ],
-      },
+      // ✅ usato SOLO come info nelle righe top e per future in alcuni casi
+      __effectiveDate: { $ifNull: ["$__inizio", "$__fine"] },
 
       __futureDate: { $ifNull: ["$__inizio", "$__fine"] },
     },
@@ -265,16 +246,14 @@ export async function getConfermeOrdineAnalytics(params: {
 
   /**
    * Stage 2: calcola label + chiave finale (ragioneSociale se presente, altrimenti id)
-   * ✅ qui avviene la "sostituzione" che vuoi tu (e quindi FE non cambia)
+   * ✅ FE non cambia: la “variantId” diventa già una label “umana”
    */
   const addVariantKeyStage: PipelineStage.AddFields = {
     $addFields: {
       __clienteLabel: {
         $let: {
           vars: { c: { $arrayElemAt: ["$__clienteDoc", 0] } },
-          in: {
-            $toString: { $ifNull: ["$$c.data.ragioneSociale", ""] },
-          },
+          in: { $toString: { $ifNull: ["$$c.data.ragioneSociale", ""] } },
         },
       },
 
@@ -316,15 +295,19 @@ export async function getConfermeOrdineAnalytics(params: {
 
   const pipeline: PipelineStage[] = [
     addFieldsStage1,
-    addEffectiveStage,
+    addDatesStage,
     baseMatchStage,
     lookupClienteStage,
     addVariantKeyStage,
     {
       $facet: {
+        /**
+         * ✅ MONTHLY: basato su createdAt (__orderDate)
+         * range: [start, endNext)
+         */
         monthsAgg: [
-          { $match: { __effectiveDate: { $ne: null } } as any },
-          { $addFields: { __month: { $dateToString: { format: "%Y-%m", date: "$__effectiveDate" } } } },
+          { $match: { __orderDate: { $ne: null, $gte: start, $lt: endNext } } as any },
+          { $addFields: { __month: { $dateToString: { format: "%Y-%m", date: "$__orderDate" } } } },
           {
             $group: {
               _id: { month: "$__month", variantId: "$__variantId" },
@@ -342,16 +325,22 @@ export async function getConfermeOrdineAnalytics(params: {
           },
         ],
 
+        /**
+         * ✅ Variants presenti nel periodo (sempre by createdAt)
+         */
         variants: [
-          { $match: { __effectiveDate: { $ne: null } } as any },
+          { $match: { __orderDate: { $ne: null, $gte: start, $lt: endNext } } as any },
           { $group: { _id: "$__variantId" } },
           { $sort: { _id: 1 } },
           { $project: { _id: 0, variantId: "$_id" } },
         ],
 
+        /**
+         * ✅ TOP recent: “ordinati” nel periodo (createdAt), più recenti
+         */
         topRecent: [
-          { $match: { __effectiveDate: { $ne: null } } as any },
-          { $sort: { __effectiveDate: -1, updatedAt: -1 } },
+          { $match: { __orderDate: { $ne: null, $gte: start, $lt: endNext } } as any },
+          { $sort: { __orderDate: -1, updatedAt: -1 } },
           {
             $group: {
               _id: "$__variantId",
@@ -364,6 +353,7 @@ export async function getConfermeOrdineAnalytics(params: {
                   statoAvanzamento: "$__stato",
                   inizioConsegna: "$__inizio",
                   fineConsegna: "$__fine",
+                  // info: consegna (inizio/fine)
                   effectiveDate: "$__effectiveDate",
                   valore: "$__valore",
                 },
@@ -374,6 +364,10 @@ export async function getConfermeOrdineAnalytics(params: {
           { $sort: { variantId: 1 } },
         ],
 
+        /**
+         * ✅ TOP upcoming: prossimi 12 mesi (in base a __futureDate = inizio || fine)
+         * (rimane consegna-based)
+         */
         topUpcoming: [
           { $match: { __futureDate: { $ne: null, $gte: futureStart, $lt: futureEnd } } as any },
           { $sort: { __futureDate: 1, updatedAt: -1 } },
@@ -399,6 +393,11 @@ export async function getConfermeOrdineAnalytics(params: {
           { $sort: { variantId: 1 } },
         ],
 
+        /**
+         * TOP by value: più grandi (globale visibile)
+         * Se vuoi limitarlo al periodo ordini, aggiungi:
+         * { $match: { __orderDate: { $ne:null, $gte:start, $lt:endNext } } }
+         */
         topValue: [
           { $sort: { __valore: -1, updatedAt: -1 } },
           {
