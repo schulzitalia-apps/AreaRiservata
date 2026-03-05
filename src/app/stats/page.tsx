@@ -2,7 +2,7 @@
 "use client";
 
 import Breadcrumb from "@/components/Breadcrumbs/Breadcrumb";
-import ConfermeOrdineOverview from "@/components/AtlasModuli/Ricavi/RicaviOverview";
+import ConfermeOrdineOverview from "@/components/AtlasModuli/Conferme/ConfermeOrdineOverview";
 
 export default function StatsPage() {
   return (
