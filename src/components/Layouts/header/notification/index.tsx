@@ -28,7 +28,6 @@ const TYPE_ICON_MAP: Record<string, string> = {
 };
 
 const DEFAULT_ICON = "/images/user/user-01.png";
-const MAX_ITEMS = 4;
 
 function buildEventoHref(type: string, id: string) {
   return `/eventi/${type}/${id}`;
@@ -199,7 +198,7 @@ export function Notification() {
     }
 
     all.sort((a, b) => safeDateValue(b.item) - safeDateValue(a.item));
-    return all.slice(0, MAX_ITEMS);
+    return all;
   }, [azioniState.byType, notificheState.byType, types]);
 
   const totalCount = useMemo(() => {
@@ -241,39 +240,6 @@ export function Notification() {
 
   return (
     <>
-      {/* Scrollbar brandizzata locale (theme-based) */}
-      <style jsx global>{`
-          .notif-scroll {
-              scrollbar-width: thin;
-              scrollbar-color: rgba(16, 185, 129, 0.55) transparent;
-          }
-          .notif-scroll::-webkit-scrollbar {
-              width: 10px;
-          }
-          .notif-scroll::-webkit-scrollbar-track {
-              background: transparent;
-          }
-          .notif-scroll::-webkit-scrollbar-thumb {
-              background-color: rgba(16, 185, 129, 0.45);
-              border-radius: 999px;
-              border: 2px solid transparent;
-              background-clip: content-box;
-          }
-          .notif-scroll::-webkit-scrollbar-thumb:hover {
-              background-color: rgba(16, 185, 129, 0.65);
-          }
-
-          .dark .notif-scroll {
-              scrollbar-color: rgba(16, 185, 129, 0.55) transparent;
-          }
-          .dark .notif-scroll::-webkit-scrollbar-thumb {
-              background-color: rgba(16, 185, 129, 0.35);
-          }
-          .dark .notif-scroll::-webkit-scrollbar-thumb:hover {
-              background-color: rgba(16, 185, 129, 0.55);
-          }
-      `}</style>
-
       <Dropdown isOpen={isOpen} setIsOpen={setIsOpen}>
         <DropdownTrigger
           className="grid size-12 place-items-center rounded-full border bg-gray-2 text-dark outline-none hover:text-primary focus-visible:border-primary focus-visible:text-primary dark:border-dark-4 dark:bg-dark-3 dark:text-white dark:focus-visible:border-primary"
@@ -293,48 +259,46 @@ export function Notification() {
         <DropdownContent
           align="center"
           className={cn(
-            "border border-stroke bg-white px-3.5 py-3 shadow-md dark:border-black dark:bg-black",
-            "w-[min(22rem,calc(100vw-2rem))]",
-            "max-h-[min(23rem,calc(100vh-8rem))] overflow-hidden",
+            "overflow-hidden rounded-[1.35rem] border border-stroke/80 bg-white/95 px-3.5 py-3 shadow-[0_22px_60px_rgba(18,51,38,0.18)] backdrop-blur-md",
+            "dark:border-dark-3/35 dark:bg-[#020814]/95 dark:shadow-[0_28px_80px_rgba(0,255,110,0.14)]",
+            "w-[min(24rem,calc(100vw-2rem))]",
+            "max-h-[min(32rem,calc(100vh-6rem))]",
             isMobile && "fixed left-1/2 top-20 -translate-x-1/2",
           )}
         >
-          <div className="mb-1 flex items-center justify-between px-2 py-1.5">
-            <span className="text-lg font-medium text-dark dark:text-white">
+          <div className="mb-2 flex items-center justify-between rounded-2xl border border-stroke/70 bg-light-surface/80 px-3 py-2 dark:border-dark-3/30 dark:bg-dark-accent-soft/60">
+            <span className="text-lg font-semibold text-dark dark:text-white">
               Notifiche
             </span>
 
-            <span className="rounded-md bg-primary px-[9px] py-0.5 text-xs font-medium text-white">
+            <span className="rounded-full bg-primary px-2.5 py-1 text-xs font-semibold text-white shadow-[0_8px_18px_rgba(44,214,115,0.28)] dark:bg-dark-3 dark:text-dark">
               {isAnyLoading ? "…" : totalCount}{" "}
               {totalCount === 1 ? "nuova" : "nuove"}
             </span>
           </div>
 
-          {/* ✅ LISTA: snap + fondo extra + spacer (non taglia l’ultima) */}
           <ul
             className={cn(
-              "notif-scroll mb-3 overflow-y-auto overscroll-contain pr-1",
-              "max-h-[18.5rem] min-[420px]:max-h-[23rem]",
+              "atlas-scrollbar mb-1 overflow-y-auto overscroll-contain pr-2",
+              "max-h-[min(25rem,calc(100vh-11rem))]",
               "[webkit-overflow-scrolling:touch]",
-              "snap-y snap-mandatory",
-              // ✅ extra fondo per arrivare a mostrare l'ultimo item intero
-              "scroll-py-2 scroll-pb-10 pb-10",
+              "space-y-1.5 scroll-py-2 pb-2",
             )}
           >
             {!isAuthed && (
-              <li className="snap-start scroll-mt-2 px-2 py-2 text-sm text-dark-5 dark:text-dark-6">
+              <li className="rounded-xl px-3 py-3 text-sm text-dark-5 dark:text-dark-6">
                 Effettua l’accesso per vedere le notifiche.
               </li>
             )}
 
             {isAuthed && isAnyLoading && flattened.length === 0 && (
-              <li className="snap-start scroll-mt-2 px-2 py-2 text-sm text-dark-5 dark:text-dark-6">
+              <li className="rounded-xl px-3 py-3 text-sm text-dark-5 dark:text-dark-6">
                 Caricamento notifiche…
               </li>
             )}
 
             {isAuthed && !isAnyLoading && flattened.length === 0 && (
-              <li className="snap-start scroll-mt-2 px-2 py-2 text-sm text-dark-5 dark:text-dark-6">
+              <li className="rounded-xl px-3 py-3 text-sm text-dark-5 dark:text-dark-6">
                 Nessuna notifica al momento.
               </li>
             )}
@@ -375,7 +339,7 @@ export function Notification() {
                     <li
                       key={`${kind}:${typeSlug}:${item.id}`}
                       role="menuitem"
-                      className="snap-start scroll-mt-2"
+                      className="scroll-mt-2"
                     >
                       <Link
                         href={href}

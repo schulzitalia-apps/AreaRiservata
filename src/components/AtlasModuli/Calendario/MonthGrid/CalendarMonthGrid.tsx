@@ -104,7 +104,7 @@ function MoreEventsPopover({
                              isoDay,
                              events,
                              label,
-                             maxWidth = "min(28rem, calc(100vw - 2rem))",
+                             maxWidth = "min(25rem, calc(100vw - 2rem))",
                              getEventColor,
                              onEventMenu,
                            }: {
@@ -117,10 +117,25 @@ function MoreEventsPopover({
 }) {
   const anchorRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const closeTimer = useRef<number | null>(null);
   const dayLabel = useMemo(() => formatPopoverDayLabel(isoDay), [isoDay]);
 
-  const openNow = () => setOpen(true);
-  const closeNow = () => setOpen(false);
+  const openNow = () => {
+    if (closeTimer.current) window.clearTimeout(closeTimer.current);
+    closeTimer.current = null;
+    setOpen(true);
+  };
+
+  const closeNow = () => {
+    if (closeTimer.current) window.clearTimeout(closeTimer.current);
+    closeTimer.current = null;
+    setOpen(false);
+  };
+
+  const closeSoon = () => {
+    if (closeTimer.current) window.clearTimeout(closeTimer.current);
+    closeTimer.current = window.setTimeout(() => setOpen(false), 120);
+  };
 
   const toggle = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -143,7 +158,12 @@ function MoreEventsPopover({
   }, [open]);
 
   return (
-    <div ref={anchorRef} className="relative">
+    <div
+      ref={anchorRef}
+      className="relative"
+      onMouseEnter={openNow}
+      onMouseLeave={closeSoon}
+    >
       <div
         onClick={toggle}
         onContextMenu={(e) => {
@@ -161,29 +181,31 @@ function MoreEventsPopover({
         placement="right"
         offset={14}
         shift={16}
+        onMouseEnter={openNow}
+        onMouseLeave={closeSoon}
       >
         {({ placement: finalPlacement }) => (
           <Popover
             placement={finalPlacement}
             maxWidth={maxWidth}
             withConnector
-            className="overflow-hidden p-0"
+            className="overflow-hidden border-stroke/80 bg-white/95 p-0 shadow-[0_24px_64px_rgba(18,51,38,0.18)] backdrop-blur-xl dark:border-dark-3/40 dark:bg-[#020814]/94 dark:shadow-[0_24px_72px_rgba(0,255,110,0.14)]"
           >
-            <div className="w-[min(28rem,calc(100vw-2rem))]">
-              <div className="border-b border-white/10 bg-slate-950/90 px-4 py-3 text-white">
+            <div className="w-[min(25rem,calc(100vw-2rem))]">
+              <div className="border-b border-stroke/70 bg-gradient-to-r from-light-surface via-white to-light-surface-alt px-4 py-3 text-light-text dark:border-dark-3/30 dark:bg-gradient-to-r dark:from-[#03130E] dark:via-[#051E18] dark:to-[#020814] dark:text-white">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="text-sm font-semibold leading-tight">Altri appuntamenti</div>
-                    <div className="mt-1 text-xs text-white/60">{dayLabel}</div>
+                    <div className="mt-1 text-xs text-gray-600 dark:text-white/60">{dayLabel}</div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-white/75">
+                    <span className="shrink-0 rounded-full bg-primary/12 px-2 py-0.5 text-[10px] font-semibold text-primary dark:bg-dark-3/15 dark:text-dark-3">
                       {events.length}
                     </span>
                     <button
                       type="button"
                       aria-label="Chiudi elenco eventi"
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition hover:bg-white/10 hover:text-white"
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-stroke/80 bg-white/80 text-gray-600 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary dark:border-dark-3/30 dark:bg-white/5 dark:text-white/70 dark:hover:border-dark-3/60 dark:hover:bg-dark-3/10 dark:hover:text-white"
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -196,7 +218,7 @@ function MoreEventsPopover({
                 </div>
               </div>
 
-              <div className="max-h-[min(32rem,calc(100vh-7rem))] overflow-y-auto overscroll-contain px-3 py-3">
+              <div className="atlas-scrollbar max-h-[min(28rem,calc(100vh-8rem))] overflow-y-auto overscroll-contain px-3 py-3">
                 <ul className="space-y-2">
                   {events.map((ev, i) => {
                     const { isStart, isEnd, isMiddle } = segmentKindForDay(isoDay, ev);
@@ -208,8 +230,8 @@ function MoreEventsPopover({
                           <button
                             type="button"
                             className={cn(
-                              "w-full rounded-xl border px-3 py-2 text-left text-sm leading-snug transition",
-                              "shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] hover:scale-[0.995] hover:opacity-95",
+                              "w-full rounded-xl border px-3 py-2.5 text-left text-sm leading-snug transition",
+                              "shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] hover:-translate-y-[1px] hover:opacity-95",
                               isMiddle ? scheme.pillMiddle : scheme.pillSolid,
                               !isStart && "rounded-l-md",
                               !isEnd && "rounded-r-md",
@@ -236,7 +258,7 @@ function MoreEventsPopover({
                 </ul>
               </div>
 
-              <div className="border-t border-black/10 bg-black/5 px-4 py-2 text-[11px] text-gray-600 dark:border-white/10 dark:bg-white/5 dark:text-white/55">
+              <div className="border-t border-stroke/60 bg-light-surface/70 px-4 py-2 text-[11px] text-gray-600 dark:border-dark-3/20 dark:bg-white/5 dark:text-white/55">
                 Seleziona un evento per aprire il menu rapido. Premi `Esc` per chiudere.
               </div>
             </div>
