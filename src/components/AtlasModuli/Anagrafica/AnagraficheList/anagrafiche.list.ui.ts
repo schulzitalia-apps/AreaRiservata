@@ -13,16 +13,15 @@ export const ANAGRAFICHE_LIST_UI_BY_SLUG: Partial<
     variant: "comfortable",
     main: {
       title: fk("ragioneSociale"),
-      subtitle: fk("tipoCliente"),
-      showOwner: true,
-      showDate: "updatedOrCreated",
+      subtitle: fk("citta", "email"),
+      showOwner: false,
+      showDate: false,
       referencePills: false,
     },
     columns: {
-      mode: "searchIn",
-      // extra colonne oltre al searchIn:
-      keys: fk("email", "telefonoMobile"),
-      showVisibility: true,
+      mode: "custom",
+      keys: fk(),
+      showVisibility: false,
     },
     controls: {
       docType: true,
@@ -31,7 +30,27 @@ export const ANAGRAFICHE_LIST_UI_BY_SLUG: Partial<
     },
     hoverPreview: false,
   },
-
+  "conferme-ordine": {
+    variant: "comfortable",
+    main: {
+      title: fk("riferimento"),
+      subtitle: fk("numeroOrdine"),
+      showOwner: false,
+      showDate: false,
+      referencePills: false,
+    },
+    columns: {
+      mode: "custom",
+      keys: fk("inizioConsegna"),
+      showVisibility: false,
+    },
+    controls: {
+      docType: true,
+      visibility: false,
+      sort: false,
+    },
+    hoverPreview: false,
+  },
 };
 
 export function getAnagraficheListUIConfig(
