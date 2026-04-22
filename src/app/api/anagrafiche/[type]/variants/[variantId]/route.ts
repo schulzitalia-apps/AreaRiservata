@@ -7,6 +7,11 @@ import {
   updateVariant,
   deleteVariant,
 } from "@/server-utils/service/variantConfigQuery";
+import {
+  getExportVariant,
+  updateExportVariant,
+  deleteExportVariant,
+} from "@/server-utils/service/exportVariantConfigQuery";
 
 export const runtime = "nodejs";
 
@@ -16,6 +21,10 @@ function decodeParam(x: string) {
   } catch {
     return x;
   }
+}
+
+function isExportScope(req: NextRequest) {
+  return new URL(req.url).searchParams.get("scope") === "export";
 }
 
 // GET /api/anagrafiche/:type/variants/:variantId
@@ -34,10 +43,15 @@ export async function GET(
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
 
-  const data = await getVariant({
-    anagraficaSlug: type,
-    variantId: decodeParam(variantId),
-  });
+  const data = isExportScope(req)
+    ? await getExportVariant({
+        anagraficaSlug: type,
+        variantId: decodeParam(variantId),
+      })
+    : await getVariant({
+        anagraficaSlug: type,
+        variantId: decodeParam(variantId),
+      });
 
   if (!data) {
     return NextResponse.json({ message: "Not found" }, { status: 404 });
@@ -77,21 +91,53 @@ export async function PATCH(
   const body = await req.json();
 
   try {
-    const updated = await updateVariant({
-      anagraficaSlug: type,
-      variantId: decodeParam(variantId),
-      payload: {
-        label: typeof body?.label === "string" ? body.label : undefined,
-        includeFields: Array.isArray(body?.includeFields)
-          ? body.includeFields
-          : undefined,
-        fieldOverrides:
-          body?.fieldOverrides && typeof body.fieldOverrides === "object"
-            ? body.fieldOverrides
-            : undefined,
-      },
-      userId,
-    });
+    const updated = isExportScope(req)
+      ? await updateExportVariant({
+          anagraficaSlug: type,
+          variantId: decodeParam(variantId),
+          payload: {
+            label: typeof body?.label === "string" ? body.label : undefined,
+            format: body?.format === "xls" || body?.format === "csv" ? body.format : undefined,
+            includeFields: Array.isArray(body?.includeFields)
+              ? body.includeFields
+              : undefined,
+            referenceExpansions:
+              body?.referenceExpansions && typeof body.referenceExpansions === "object"
+                ? body.referenceExpansions
+                : undefined,
+            filterDateField:
+              typeof body?.filterDateField === "string" || body?.filterDateField === null
+                ? body.filterDateField
+                : undefined,
+            filterSelectField:
+              typeof body?.filterSelectField === "string" || body?.filterSelectField === null
+                ? body.filterSelectField
+                : undefined,
+            sortDateField:
+              typeof body?.sortDateField === "string" || body?.sortDateField === null
+                ? body.sortDateField
+                : undefined,
+            sortDir: body?.sortDir === "desc" || body?.sortDir === "asc"
+              ? body.sortDir
+              : undefined,
+          },
+          userId,
+        })
+      : await updateVariant({
+          anagraficaSlug: type,
+          variantId: decodeParam(variantId),
+          payload: {
+            label: typeof body?.label === "string" ? body.label : undefined,
+            includeFields: Array.isArray(body?.includeFields)
+              ? body.includeFields
+              : undefined,
+            fieldOverrides:
+              body?.fieldOverrides && typeof body.fieldOverrides === "object"
+                ? body.fieldOverrides
+                : undefined,
+          },
+          userId,
+        });
 
     if (!updated) {
       return NextResponse.json({ message: "Not found" }, { status: 404 });
@@ -108,6 +154,14 @@ export async function PATCH(
     if (
       msg.startsWith("OVERRIDES_NOT_INCLUDED") ||
       err?.code === "OVERRIDES_NOT_INCLUDED"
+    ) {
+      return NextResponse.json({ message: msg }, { status: 400 });
+    }
+
+    if (
+      msg.startsWith("INVALID_FILTER_DATE_FIELD") ||
+      msg.startsWith("INVALID_SORT_DATE_FIELD") ||
+      msg.startsWith("INVALID_SELECT_FIELD")
     ) {
       return NextResponse.json({ message: msg }, { status: 400 });
     }
@@ -151,10 +205,15 @@ export async function DELETE(
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
 
-  const result = await deleteVariant({
-    anagraficaSlug: type,
-    variantId: decodeParam(variantId),
-  });
+  const result = isExportScope(req)
+    ? await deleteExportVariant({
+        anagraficaSlug: type,
+        variantId: decodeParam(variantId),
+      })
+    : await deleteVariant({
+        anagraficaSlug: type,
+        variantId: decodeParam(variantId),
+      });
 
   if (!result.ok) {
     return NextResponse.json({ message: "Not found" }, { status: 404 });

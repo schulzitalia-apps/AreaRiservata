@@ -20,6 +20,10 @@ import {
 } from "@/components/ui";
 
 import { formatFieldValue, uniqFieldKeys } from "./helpers";
+import {
+  apiListExportVariants,
+  type ExportVariantConfigDTO,
+} from "./exportVariants.api";
 
 type ExportFormat = "csv" | "xls";
 
@@ -208,6 +212,9 @@ export function AnagraficheExportModal({
   const [selectFilters, setSelectFilters] = useState<Partial<Record<FieldKey, string>>>({});
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string>("");
+  const [presetLoading, setPresetLoading] = useState(false);
+  const [presetItems, setPresetItems] = useState<ExportVariantConfigDTO[]>([]);
+  const [presetVariantId, setPresetVariantId] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -225,8 +232,85 @@ export function AnagraficheExportModal({
     setError("");
   }, [open, safeDefaultSelectedFields]);
 
+  useEffect(() => {
+    if (!open) return;
+
+    let cancelled = false;
+
+    async function loadPresets() {
+      setPresetLoading(true);
+      try {
+        const items = await apiListExportVariants(type);
+        if (cancelled) return;
+
+        setPresetItems(items);
+        setPresetVariantId((current) => {
+          if (current && items.some((item) => item.variantId === current)) return current;
+          return items[0]?.variantId ?? "";
+        });
+      } catch (err: any) {
+        if (cancelled) return;
+        setPresetItems([]);
+        setPresetVariantId("");
+        setError(String(err?.message ?? err ?? "Errore caricamento preset export."));
+      } finally {
+        if (!cancelled) setPresetLoading(false);
+      }
+    }
+
+    void loadPresets();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, type]);
+
+  const selectedPreset = useMemo(
+    () => presetItems.find((item) => item.variantId === presetVariantId) ?? null,
+    [presetItems, presetVariantId],
+  );
+
+  // Se esiste almeno un preset salvato, il modal entra in modalita guidata:
+  // l'utente finale puo solo valorizzare i controlli autorizzati dal preset.
+  const hasPresetMode = !!selectedPreset;
+
+  const effectiveSelectedFields = useMemo(() => {
+    if (!selectedPreset) return selectedFields;
+    return uniqFieldKeys(
+      selectedPreset.includeFields.filter((fieldKey) => !!def.fields[fieldKey as FieldKey]) as FieldKey[],
+    );
+  }, [def.fields, selectedFields, selectedPreset]);
+
+  const effectiveReferenceExpansions = useMemo<ReferenceExpansionState>(() => {
+    if (!selectedPreset) return referenceExpansions;
+
+    return Object.fromEntries(
+      Object.entries(selectedPreset.referenceExpansions ?? {}).map(([fieldKey, nestedKeys]) => [
+        fieldKey,
+        uniqFieldKeys(
+          (Array.isArray(nestedKeys) ? nestedKeys : []).filter(
+            (nestedKey) => !!def.fields[fieldKey as FieldKey] && nestedKey,
+          ) as FieldKey[],
+        ),
+      ]),
+    ) as ReferenceExpansionState;
+  }, [referenceExpansions, selectedPreset, def.fields]);
+
+  const effectiveDateFilterField = selectedPreset?.filterDateField ?? dateFilterField;
+  const effectiveDateSortField = selectedPreset?.sortDateField ?? dateSortField;
+  const effectiveDateSortDir = selectedPreset?.sortDir ?? dateSortDir;
+  const effectiveFormat = selectedPreset?.format ?? format;
+  const effectiveSelectFilters = useMemo<Partial<Record<FieldKey, string>>>(() => {
+    if (!selectedPreset?.filterSelectField) return hasPresetMode ? {} : selectFilters;
+
+    return {
+      [selectedPreset.filterSelectField as FieldKey]:
+        selectFilters[selectedPreset.filterSelectField as FieldKey] ?? "",
+    };
+  }, [hasPresetMode, selectFilters, selectedPreset]);
+
   const referencePlans = useMemo<ReferencePlan[]>(() => {
-    return selectedFields
+    return effectiveSelectedFields
       .map((fieldKey) => {
         const fieldDef = def.fields[fieldKey];
         const isSingleReference = isReferenceField(fieldDef);
@@ -237,7 +321,7 @@ export function AnagraficheExportModal({
 
         try {
           const targetDef = getAnagraficaDef(fieldDef.reference.targetSlug);
-          const rawNestedKeys = referenceExpansions[fieldKey] ?? [];
+          const rawNestedKeys = effectiveReferenceExpansions[fieldKey] ?? [];
           const nestedKeys = uniqFieldKeys(
             rawNestedKeys.filter((nestedKey) => !!targetDef.fields[nestedKey]),
           );
@@ -263,7 +347,7 @@ export function AnagraficheExportModal({
         }
       })
       .filter(Boolean) as ReferencePlan[];
-  }, [def.fields, referenceExpansions, selectedFields]);
+  }, [def.fields, effectiveReferenceExpansions, effectiveSelectedFields]);
 
   const activeBaseFilters = useMemo(() => {
     const entries: string[] = [];
@@ -312,7 +396,7 @@ export function AnagraficheExportModal({
   };
 
   const handleExport = async () => {
-    if (!selectedFields.length) {
+    if (!effectiveSelectedFields.length) {
       setError("Seleziona almeno un campo da esportare.");
       return;
     }
@@ -322,10 +406,12 @@ export function AnagraficheExportModal({
 
     try {
       const requestedFields = uniqFieldKeys([
-        ...selectedFields,
-        ...(dateFilterField ? ([dateFilterField] as FieldKey[]) : []),
-        ...(dateSortField ? ([dateSortField] as FieldKey[]) : []),
-        ...Object.entries(selectFilters)
+        ...effectiveSelectedFields,
+        ...(effectiveDateFilterField
+          ? ([effectiveDateFilterField] as FieldKey[])
+          : []),
+        ...(effectiveDateSortField ? ([effectiveDateSortField] as FieldKey[]) : []),
+        ...Object.entries(effectiveSelectFilters)
           .filter(([, value]) => String(value || "").trim().length > 0)
           .map(([fieldKey]) => fieldKey as FieldKey),
       ]);
@@ -342,8 +428,8 @@ export function AnagraficheExportModal({
       const toTs = parseDateEnd(dateTo);
 
       let filteredItems = baseItems.filter((item) => {
-        if (dateFilterField) {
-          const rawDate = (item.data as any)?.[dateFilterField];
+        if (effectiveDateFilterField) {
+          const rawDate = (item.data as any)?.[effectiveDateFilterField];
           const currentTs = parseDateValue(rawDate);
 
           if (currentTs === null) return false;
@@ -351,7 +437,7 @@ export function AnagraficheExportModal({
           if (toTs !== null && currentTs >= toTs) return false;
         }
 
-        for (const [fieldKey, value] of Object.entries(selectFilters)) {
+        for (const [fieldKey, value] of Object.entries(effectiveSelectFilters)) {
           const expected = String(value || "").trim();
           if (!expected) continue;
 
@@ -362,16 +448,16 @@ export function AnagraficheExportModal({
         return true;
       });
 
-      if (dateSortField) {
+      if (effectiveDateSortField) {
         filteredItems = [...filteredItems].sort((left, right) => {
-          const leftTs = parseDateValue((left.data as any)?.[dateSortField]);
-          const rightTs = parseDateValue((right.data as any)?.[dateSortField]);
+          const leftTs = parseDateValue((left.data as any)?.[effectiveDateSortField]);
+          const rightTs = parseDateValue((right.data as any)?.[effectiveDateSortField]);
 
           if (leftTs === null && rightTs === null) return 0;
           if (leftTs === null) return 1;
           if (rightTs === null) return -1;
 
-          return dateSortDir === "asc" ? leftTs - rightTs : rightTs - leftTs;
+          return effectiveDateSortDir === "asc" ? leftTs - rightTs : rightTs - leftTs;
         });
       }
 
@@ -444,7 +530,7 @@ export function AnagraficheExportModal({
 
       const columns: ExportColumn[] = [];
 
-      for (const fieldKey of selectedFields) {
+      for (const fieldKey of effectiveSelectedFields) {
         const fieldDef = def.fields[fieldKey];
         const referencePlan = referencePlans.find((plan) => plan.fieldKey === fieldKey);
 
@@ -503,7 +589,7 @@ export function AnagraficheExportModal({
       const fileDate = new Date().toISOString().slice(0, 10);
       const fileBaseName = `${type}-export-${fileDate}`;
 
-      if (format === "csv") {
+      if (effectiveFormat === "csv") {
         downloadFile(
           buildCsv(columns, filteredItems),
           "text/csv;charset=utf-8",
@@ -551,6 +637,17 @@ export function AnagraficheExportModal({
     { value: "desc", label: "Decrescente" },
   ];
 
+  const presetOptions = presetItems.map((item) => ({
+    value: item.variantId,
+    label: item.label || item.variantId,
+  }));
+
+  const presetSelectFieldKey = selectedPreset?.filterSelectField as FieldKey | undefined;
+  const presetSelectFieldDef =
+    presetSelectFieldKey && def.fields[presetSelectFieldKey]?.type === "select"
+      ? def.fields[presetSelectFieldKey]
+      : null;
+
   return (
     <AppModal
       open={open}
@@ -561,7 +658,7 @@ export function AnagraficheExportModal({
       footer={
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-xs text-dark/60 dark:text-white/60">
-            {selectedFields.length} campi selezionati
+            {effectiveSelectedFields.length} campi selezionati
           </div>
           <div className="flex gap-2">
             <AppButton
@@ -593,175 +690,316 @@ export function AnagraficheExportModal({
           </div>
         ) : null}
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <AppSelect
-            label="Formato"
-            value={format}
-            onChange={(value) => setFormat(value as ExportFormat)}
-            options={formatOptions}
-          />
-
+        {presetLoading ? (
           <div className="rounded-2xl border border-stroke bg-white/60 p-4 text-sm text-dark/70 dark:border-dark-3 dark:bg-gray-dark/40 dark:text-white/70">
-            L&apos;ordinamento per data e i filtri data/select vengono applicati localmente all&apos;insieme restituito dalle API list e reference.
+            Caricamento preset export salvati…
           </div>
-        </div>
-
-        <section className="space-y-3">
-          <div>
-            <h3 className="text-base font-semibold text-dark dark:text-white">Campi da esportare</h3>
-            <p className="text-sm text-dark/60 dark:text-white/60">
-              Seleziona i campi base. Per i riferimenti puoi anche scegliere quali campi del record collegato esplodere nel file.
-            </p>
-          </div>
-
-          <div className="grid gap-3 lg:grid-cols-2">
-            {allFieldKeys.map((fieldKey) => {
-              const fieldDef = def.fields[fieldKey];
-              const checked = selectedFields.includes(fieldKey);
-              const targetPlan = referencePlans.find((plan) => plan.fieldKey === fieldKey);
-
-              return (
-                <div
-                  key={String(fieldKey)}
-                  className="rounded-2xl border border-stroke bg-white/60 p-4 dark:border-dark-3 dark:bg-gray-dark/40"
-                >
-                  <label className="flex cursor-pointer items-start gap-3">
-                    <input
-                      type="checkbox"
-                      className="mt-1 h-4 w-4 rounded border-stroke accent-primary"
-                      checked={checked}
-                      onChange={() => toggleField(fieldKey)}
-                    />
-                    <div className="min-w-0">
-                      <div className="font-medium text-dark dark:text-white">{fieldDef.label}</div>
-                      <div className="text-xs uppercase tracking-wide text-dark/45 dark:text-white/45">
-                        {fieldDef.type}
-                      </div>
-                    </div>
-                  </label>
-
-                  {checked && targetPlan ? (
-                    <div className="mt-4 rounded-2xl border border-dashed border-primary/35 bg-primary/5 p-3 dark:bg-primary/10">
-                      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">
-                        Campi del riferimento
-                      </div>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {(Object.keys(targetPlan.targetDef.fields) as FieldKey[]).map((nestedKey) => (
-                          <label
-                            key={`${String(fieldKey)}-${String(nestedKey)}`}
-                            className="flex cursor-pointer items-start gap-2 rounded-xl bg-white/70 px-3 py-2 text-sm text-dark dark:bg-gray-dark/40 dark:text-white"
-                          >
-                            <input
-                              type="checkbox"
-                              className="mt-1 h-4 w-4 rounded border-stroke accent-primary"
-                              checked={(referenceExpansions[fieldKey] ?? []).includes(nestedKey)}
-                              onChange={() => toggleReferenceNestedField(fieldKey, nestedKey)}
-                            />
-                            <span className="min-w-0 truncate">
-                              {targetPlan.targetDef.fields[nestedKey]?.label ?? nestedKey}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        {dateFields.length ? (
-          <section className="space-y-3">
-            <div>
-              <h3 className="text-base font-semibold text-dark dark:text-white">Date</h3>
-              <p className="text-sm text-dark/60 dark:text-white/60">
-                Puoi limitare l&apos;export a un intervallo e, se vuoi, ordinare il file in base a una data configurata.
-              </p>
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-2">
-              <AppSelect
-                label="Campo data per intervallo"
-                value={dateFilterField}
-                onChange={setDateFilterField}
-                options={dateFieldOptions}
-              />
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <AppInput
-                  label="Da"
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                />
-                <AppInput
-                  label="A"
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                />
+        ) : hasPresetMode ? (
+          <>
+            <section className="space-y-3">
+              <div>
+                <h3 className="text-base font-semibold text-dark dark:text-white">Schema salvato</h3>
+                <p className="text-sm text-dark/60 dark:text-white/60">
+                  L&apos;admin ha gia&apos; definito campi, riferimenti e formato. Qui scegli solo il preset e i filtri finali consentiti.
+                </p>
               </div>
 
-              <AppSelect
-                label="Ordina per data"
-                value={dateSortField}
-                onChange={setDateSortField}
-                options={dateSortOptions}
-              />
+              <div className="grid gap-4 md:grid-cols-2">
+                <AppSelect
+                  label="Preset export"
+                  value={presetVariantId}
+                  onChange={setPresetVariantId}
+                  options={presetOptions}
+                />
 
-              <AppSelect
-                label="Direzione ordinamento"
-                value={dateSortDir}
-                onChange={(value) => setDateSortDir(value as "asc" | "desc")}
-                options={sortDirOptions}
-                disabled={!dateSortField}
-              />
-            </div>
-          </section>
-        ) : null}
+                <div className="rounded-2xl border border-stroke bg-white/60 p-4 text-sm text-dark/70 dark:border-dark-3 dark:bg-gray-dark/40 dark:text-white/70">
+                  <div>Formato: <strong>{effectiveFormat.toUpperCase()}</strong></div>
+                  <div>Campi: <strong>{effectiveSelectedFields.length}</strong></div>
+                  <div>
+                    Ordinamento:{" "}
+                    <strong>
+                      {effectiveDateSortField
+                        ? `${def.fields[effectiveDateSortField as FieldKey]?.label ?? effectiveDateSortField} (${effectiveDateSortDir})`
+                        : "predefinito"}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+            </section>
 
-        {selectFields.length ? (
-          <section className="space-y-3">
-            <div>
-              <h3 className="text-base font-semibold text-dark dark:text-white">Filtri select</h3>
-              <p className="text-sm text-dark/60 dark:text-white/60">
-                Per ogni campo select puoi scegliere uno stato preciso da esportare.
-              </p>
-            </div>
+            <section className="space-y-3">
+              <div>
+                <h3 className="text-base font-semibold text-dark dark:text-white">Filtri finali</h3>
+                <p className="text-sm text-dark/60 dark:text-white/60">
+                  Usi i soli controlli previsti dal preset selezionato.
+                </p>
+              </div>
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              {selectFields.map((fieldKey) => {
-                const fieldDef = def.fields[fieldKey];
-                const options = [
-                  { value: "", label: "Tutti" },
-                  ...(fieldDef.options ?? []).map(([value, label]) => ({ value, label })),
-                ];
+              <div className="grid gap-4 lg:grid-cols-2">
+                {selectedPreset?.filterDateField ? (
+                  <>
+                    <AppField
+                      label="Campo data preset"
+                      hint="Intervallo applicato lato client sui risultati restituiti dalle API esistenti."
+                    >
+                      <div className="rounded-2xl border border-stroke bg-white/60 px-4 py-3 text-sm text-dark/70 dark:border-dark-3 dark:bg-gray-dark/40 dark:text-white/70">
+                        {def.fields[selectedPreset.filterDateField as FieldKey]?.label ?? selectedPreset.filterDateField}
+                      </div>
+                    </AppField>
 
-                return (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <AppInput
+                        label="Da"
+                        type="date"
+                        value={dateFrom}
+                        onChange={(e) => setDateFrom(e.target.value)}
+                      />
+                      <AppInput
+                        label="A"
+                        type="date"
+                        value={dateTo}
+                        onChange={(e) => setDateTo(e.target.value)}
+                      />
+                    </div>
+                  </>
+                ) : null}
+
+                {presetSelectFieldDef && presetSelectFieldKey ? (
                   <AppSelect
-                    key={String(fieldKey)}
-                    label={fieldDef.label}
-                    value={selectFilters[fieldKey] ?? ""}
-                    onChange={(value) => updateSelectFilter(fieldKey, value)}
-                    options={options}
+                    label={presetSelectFieldDef.label}
+                    value={selectFilters[presetSelectFieldKey] ?? ""}
+                    onChange={(value) => updateSelectFilter(presetSelectFieldKey, value)}
+                    options={[
+                      { value: "", label: "Tutti" },
+                      ...(presetSelectFieldDef.options ?? []).map(([value, label]) => ({
+                        value,
+                        label,
+                      })),
+                    ]}
                   />
-                );
-              })}
-            </div>
-          </section>
-        ) : null}
+                ) : null}
+              </div>
 
-        {!dateFields.length && !selectFields.length ? (
-          <AppField
-            label="Filtri speciali"
-            hint="Questo tipo di anagrafica non espone campi date/select nel catalogo corrente."
-          >
-            <div className="rounded-2xl border border-stroke bg-white/60 px-4 py-3 text-sm text-dark/65 dark:border-dark-3 dark:bg-gray-dark/40 dark:text-white/65">
-              L&apos;export resta disponibile sui campi scelti, ma senza filtri aggiuntivi configurati.
+              {!selectedPreset?.filterDateField && !presetSelectFieldDef ? (
+                <div className="rounded-2xl border border-stroke bg-white/60 px-4 py-3 text-sm text-dark/65 dark:border-dark-3 dark:bg-gray-dark/40 dark:text-white/65">
+                  Questo preset non espone filtri finali aggiuntivi: puoi esportare direttamente.
+                </div>
+              ) : null}
+            </section>
+
+            <section className="space-y-3">
+              <div>
+                <h3 className="text-base font-semibold text-dark dark:text-white">Struttura del file</h3>
+                <p className="text-sm text-dark/60 dark:text-white/60">
+                  Anteprima dei campi gia&apos; definiti nel preset, compresi i riferimenti esplosi.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-stroke bg-white/60 p-4 dark:border-dark-3 dark:bg-gray-dark/40">
+                <div className="flex flex-wrap gap-2">
+                  {effectiveSelectedFields.map((fieldKey) => (
+                    <span
+                      key={String(fieldKey)}
+                      className="rounded-full border border-stroke px-3 py-1 text-xs text-dark/75 dark:border-dark-3 dark:text-white/75"
+                    >
+                      {def.fields[fieldKey]?.label ?? fieldKey}
+                    </span>
+                  ))}
+                </div>
+
+                {referencePlans.length ? (
+                  <div className="mt-4 space-y-2">
+                    {referencePlans.map((plan) => (
+                      <div
+                        key={String(plan.fieldKey)}
+                        className="rounded-xl border border-dashed border-primary/35 bg-primary/5 px-3 py-2 text-sm text-dark/75 dark:bg-primary/10 dark:text-white/75"
+                      >
+                        <strong>{def.fields[plan.fieldKey]?.label ?? plan.fieldKey}</strong>
+                        {plan.nestedKeys.length
+                          ? ` -> ${plan.nestedKeys
+                              .map((nestedKey) => plan.targetDef.fields[nestedKey]?.label ?? nestedKey)
+                              .join(", ")}`
+                          : " -> solo etichetta del riferimento"}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </section>
+          </>
+        ) : (
+          <>
+            <div className="grid gap-4 md:grid-cols-2">
+              <AppSelect
+                label="Formato"
+                value={format}
+                onChange={(value) => setFormat(value as ExportFormat)}
+                options={formatOptions}
+              />
+
+              <div className="rounded-2xl border border-stroke bg-white/60 p-4 text-sm text-dark/70 dark:border-dark-3 dark:bg-gray-dark/40 dark:text-white/70">
+                L&apos;ordinamento per data e i filtri data/select vengono applicati localmente all&apos;insieme restituito dalle API list e reference.
+              </div>
             </div>
-          </AppField>
-        ) : null}
+
+            <section className="space-y-3">
+              <div>
+                <h3 className="text-base font-semibold text-dark dark:text-white">Campi da esportare</h3>
+                <p className="text-sm text-dark/60 dark:text-white/60">
+                  Seleziona i campi base. Per i riferimenti puoi anche scegliere quali campi del record collegato esplodere nel file.
+                </p>
+              </div>
+
+              <div className="grid gap-3 lg:grid-cols-2">
+                {allFieldKeys.map((fieldKey) => {
+                  const fieldDef = def.fields[fieldKey];
+                  const checked = selectedFields.includes(fieldKey);
+                  const targetPlan = referencePlans.find((plan) => plan.fieldKey === fieldKey);
+
+                  return (
+                    <div
+                      key={String(fieldKey)}
+                      className="rounded-2xl border border-stroke bg-white/60 p-4 dark:border-dark-3 dark:bg-gray-dark/40"
+                    >
+                      <label className="flex cursor-pointer items-start gap-3">
+                        <input
+                          type="checkbox"
+                          className="mt-1 h-4 w-4 rounded border-stroke accent-primary"
+                          checked={checked}
+                          onChange={() => toggleField(fieldKey)}
+                        />
+                        <div className="min-w-0">
+                          <div className="font-medium text-dark dark:text-white">{fieldDef.label}</div>
+                          <div className="text-xs uppercase tracking-wide text-dark/45 dark:text-white/45">
+                            {fieldDef.type}
+                          </div>
+                        </div>
+                      </label>
+
+                      {checked && targetPlan ? (
+                        <div className="mt-4 rounded-2xl border border-dashed border-primary/35 bg-primary/5 p-3 dark:bg-primary/10">
+                          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">
+                            Campi del riferimento
+                          </div>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            {(Object.keys(targetPlan.targetDef.fields) as FieldKey[]).map((nestedKey) => (
+                              <label
+                                key={`${String(fieldKey)}-${String(nestedKey)}`}
+                                className="flex cursor-pointer items-start gap-2 rounded-xl bg-white/70 px-3 py-2 text-sm text-dark dark:bg-gray-dark/40 dark:text-white"
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="mt-1 h-4 w-4 rounded border-stroke accent-primary"
+                                  checked={(referenceExpansions[fieldKey] ?? []).includes(nestedKey)}
+                                  onChange={() => toggleReferenceNestedField(fieldKey, nestedKey)}
+                                />
+                                <span className="min-w-0 truncate">
+                                  {targetPlan.targetDef.fields[nestedKey]?.label ?? nestedKey}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {dateFields.length ? (
+              <section className="space-y-3">
+                <div>
+                  <h3 className="text-base font-semibold text-dark dark:text-white">Date</h3>
+                  <p className="text-sm text-dark/60 dark:text-white/60">
+                    Puoi limitare l&apos;export a un intervallo e, se vuoi, ordinare il file in base a una data configurata.
+                  </p>
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <AppSelect
+                    label="Campo data per intervallo"
+                    value={dateFilterField}
+                    onChange={setDateFilterField}
+                    options={dateFieldOptions}
+                  />
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <AppInput
+                      label="Da"
+                      type="date"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                    />
+                    <AppInput
+                      label="A"
+                      type="date"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                    />
+                  </div>
+
+                  <AppSelect
+                    label="Ordina per data"
+                    value={dateSortField}
+                    onChange={setDateSortField}
+                    options={dateSortOptions}
+                  />
+
+                  <AppSelect
+                    label="Direzione ordinamento"
+                    value={dateSortDir}
+                    onChange={(value) => setDateSortDir(value as "asc" | "desc")}
+                    options={sortDirOptions}
+                    disabled={!dateSortField}
+                  />
+                </div>
+              </section>
+            ) : null}
+
+            {selectFields.length ? (
+              <section className="space-y-3">
+                <div>
+                  <h3 className="text-base font-semibold text-dark dark:text-white">Filtri select</h3>
+                  <p className="text-sm text-dark/60 dark:text-white/60">
+                    Per ogni campo select puoi scegliere uno stato preciso da esportare.
+                  </p>
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {selectFields.map((fieldKey) => {
+                    const fieldDef = def.fields[fieldKey];
+                    const options = [
+                      { value: "", label: "Tutti" },
+                      ...(fieldDef.options ?? []).map(([value, label]) => ({ value, label })),
+                    ];
+
+                    return (
+                      <AppSelect
+                        key={String(fieldKey)}
+                        label={fieldDef.label}
+                        value={selectFilters[fieldKey] ?? ""}
+                        onChange={(value) => updateSelectFilter(fieldKey, value)}
+                        options={options}
+                      />
+                    );
+                  })}
+                </div>
+              </section>
+            ) : null}
+
+            {!dateFields.length && !selectFields.length ? (
+              <AppField
+                label="Filtri speciali"
+                hint="Questo tipo di anagrafica non espone campi date/select nel catalogo corrente."
+              >
+                <div className="rounded-2xl border border-stroke bg-white/60 px-4 py-3 text-sm text-dark/65 dark:border-dark-3 dark:bg-gray-dark/40 dark:text-white/65">
+                  L&apos;export resta disponibile sui campi scelti, ma senza filtri aggiuntivi configurati.
+                </div>
+              </AppField>
+            ) : null}
+          </>
+        )}
       </div>
     </AppModal>
   );

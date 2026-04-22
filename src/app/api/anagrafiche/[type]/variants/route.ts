@@ -6,8 +6,16 @@ import {
   listVariants,
   createVariant,
 } from "@/server-utils/service/variantConfigQuery";
+import {
+  listExportVariants,
+  createExportVariant,
+} from "@/server-utils/service/exportVariantConfigQuery";
 
 export const runtime = "nodejs";
+
+function isExportScope(req: NextRequest) {
+  return new URL(req.url).searchParams.get("scope") === "export";
+}
 
 // GET /api/anagrafiche/:type/variants
 export async function GET(
@@ -23,6 +31,13 @@ export async function GET(
   // permesso di lettura su quello slug
   if (!hasPermission(auth, "anagrafica.view", { resourceType: type })) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+  }
+
+  // Manteniamo lo stesso endpoint per coerenza di routing,
+  // ma le varianti export restano gestite dal loro service dedicato.
+  if (isExportScope(req)) {
+    const items = await listExportVariants({ anagraficaSlug: type });
+    return NextResponse.json({ items });
   }
 
   const items = await listVariants({ anagraficaSlug: type });
@@ -62,6 +77,38 @@ export async function POST(
   const body = await req.json();
 
   try {
+    if (isExportScope(req)) {
+      const created = await createExportVariant({
+        anagraficaSlug: type,
+        payload: {
+          variantId: String(body?.variantId ?? "").trim(),
+          label: String(body?.label ?? "").trim(),
+          format: body?.format === "xls" ? "xls" : "csv",
+          includeFields: Array.isArray(body?.includeFields) ? body.includeFields : [],
+          referenceExpansions:
+            body?.referenceExpansions && typeof body.referenceExpansions === "object"
+              ? body.referenceExpansions
+              : undefined,
+          filterDateField:
+            typeof body?.filterDateField === "string" || body?.filterDateField === null
+              ? body.filterDateField
+              : undefined,
+          filterSelectField:
+            typeof body?.filterSelectField === "string" || body?.filterSelectField === null
+              ? body.filterSelectField
+              : undefined,
+          sortDateField:
+            typeof body?.sortDateField === "string" || body?.sortDateField === null
+              ? body.sortDateField
+              : undefined,
+          sortDir: body?.sortDir === "desc" ? "desc" : "asc",
+        },
+        userId,
+      });
+
+      return NextResponse.json(created, { status: 201 });
+    }
+
     const created = await createVariant({
       anagraficaSlug: type,
       payload: {
@@ -92,6 +139,14 @@ export async function POST(
     if (
       msg.startsWith("OVERRIDES_NOT_INCLUDED") ||
       err?.code === "OVERRIDES_NOT_INCLUDED"
+    ) {
+      return NextResponse.json({ message: msg }, { status: 400 });
+    }
+
+    if (
+      msg.startsWith("INVALID_FILTER_DATE_FIELD") ||
+      msg.startsWith("INVALID_SORT_DATE_FIELD") ||
+      msg.startsWith("INVALID_SELECT_FIELD")
     ) {
       return NextResponse.json({ message: msg }, { status: 400 });
     }
