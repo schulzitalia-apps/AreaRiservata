@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useRef, useState, useCallback, useEffect } from "react";
+import { AppScrollArea } from "@/components/ui";
 import { cn } from "@/server-utils/lib/utils";
 import type { CalendarEventVM } from "../types";
 import EventLabelHover from "../Tools/EventLabelHover";
@@ -66,14 +67,6 @@ const isSameYMD = (a: Date, b: Date) =>
 
 const cmpISO = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
-function formatPopoverDayLabel(isoDay: string) {
-  return new Date(`${isoDay}T00:00:00`).toLocaleDateString(undefined, {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
-}
-
 function segmentKindForDay(isoDay: string, ev: CalendarEventVM) {
   const s = new Date(ev.start);
   const e = new Date(ev.end);
@@ -104,7 +97,7 @@ function MoreEventsPopover({
                              isoDay,
                              events,
                              label,
-                             maxWidth = "min(25rem, calc(100vw - 2rem))",
+                             maxWidth = "22rem",
                              getEventColor,
                              onEventMenu,
                            }: {
@@ -118,7 +111,6 @@ function MoreEventsPopover({
   const anchorRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const closeTimer = useRef<number | null>(null);
-  const dayLabel = useMemo(() => formatPopoverDayLabel(isoDay), [isoDay]);
 
   const openNow = () => {
     if (closeTimer.current) window.clearTimeout(closeTimer.current);
@@ -178,47 +170,25 @@ function MoreEventsPopover({
       <FloatingPortal
         open={open}
         anchorRef={anchorRef as any}
-        placement="right"
-        offset={14}
-        shift={16}
+        placement="bottom"
+        offset={10}
+        shift={10}
         onMouseEnter={openNow}
         onMouseLeave={closeSoon}
       >
         {({ placement: finalPlacement }) => (
-          <Popover
-            placement={finalPlacement}
-            maxWidth={maxWidth}
-            withConnector
-            className="overflow-hidden border-stroke/80 bg-white/95 p-0 shadow-[0_24px_64px_rgba(18,51,38,0.18)] backdrop-blur-xl dark:border-dark-3/40 dark:bg-[#020814]/94 dark:shadow-[0_24px_72px_rgba(0,255,110,0.14)]"
-          >
-            <div className="w-[min(25rem,calc(100vw-2rem))]">
-              <div className="border-b border-stroke/70 bg-gradient-to-r from-light-surface via-white to-light-surface-alt px-4 py-3 text-light-text dark:border-dark-3/30 dark:bg-gradient-to-r dark:from-[#03130E] dark:via-[#051E18] dark:to-[#020814] dark:text-white">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold leading-tight">Altri appuntamenti</div>
-                    <div className="mt-1 text-xs text-gray-600 dark:text-white/60">{dayLabel}</div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="shrink-0 rounded-full bg-primary/12 px-2 py-0.5 text-[10px] font-semibold text-primary dark:bg-dark-3/15 dark:text-dark-3">
-                      {events.length}
-                    </span>
-                    <button
-                      type="button"
-                      aria-label="Chiudi elenco eventi"
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-stroke/80 bg-white/80 text-gray-600 transition hover:border-primary/60 hover:bg-primary/10 hover:text-primary dark:border-dark-3/30 dark:bg-white/5 dark:text-white/70 dark:hover:border-dark-3/60 dark:hover:bg-dark-3/10 dark:hover:text-white"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        closeNow();
-                      }}
-                    >
-                      <span className="text-sm leading-none">×</span>
-                    </button>
-                  </div>
+          <Popover placement={finalPlacement} maxWidth={maxWidth} withConnector>
+            <div className="p-2">
+              <div className="mb-2 flex items-center justify-between gap-3 px-1">
+                <div className="text-[11px] font-semibold text-gray-7 dark:text-white/80">
+                  Altri appuntamenti
                 </div>
+                <span className="rounded-full bg-gray-2 px-2 py-0.5 text-[10px] font-medium text-gray-7 dark:bg-dark-2 dark:text-dark-6">
+                  {events.length}
+                </span>
               </div>
 
-              <div className="atlas-scrollbar max-h-[min(28rem,calc(100vh-8rem))] overflow-y-auto overscroll-contain px-3 py-3">
+              <AppScrollArea className="max-h-[18rem] overscroll-contain pr-1">
                 <ul className="space-y-2">
                   {events.map((ev, i) => {
                     const { isStart, isEnd, isMiddle } = segmentKindForDay(isoDay, ev);
@@ -230,11 +200,11 @@ function MoreEventsPopover({
                           <button
                             type="button"
                             className={cn(
-                              "w-full rounded-xl border px-3 py-2.5 text-left text-sm leading-snug transition",
-                              "shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] hover:-translate-y-[1px] hover:opacity-95",
+                              "w-full text-left truncate rounded-md border px-2 py-1 text-xs transition",
                               isMiddle ? scheme.pillMiddle : scheme.pillSolid,
-                              !isStart && "rounded-l-md",
-                              !isEnd && "rounded-r-md",
+                              !isStart && "rounded-l-none",
+                              !isEnd && "rounded-r-none",
+                              "hover:opacity-95",
                             )}
                             onClick={(e) => {
                               e.preventDefault();
@@ -256,11 +226,7 @@ function MoreEventsPopover({
                     );
                   })}
                 </ul>
-              </div>
-
-              <div className="border-t border-stroke/60 bg-light-surface/70 px-4 py-2 text-[11px] text-gray-600 dark:border-dark-3/20 dark:bg-white/5 dark:text-white/55">
-                Seleziona un evento per aprire il menu rapido. Premi `Esc` per chiudere.
-              </div>
+              </AppScrollArea>
             </div>
           </Popover>
         )}

@@ -1,5 +1,6 @@
 "use client";
 
+import { AppScrollArea } from "@/components/ui";
 import {
   Dropdown,
   DropdownContent,
@@ -259,32 +260,32 @@ export function Notification() {
         <DropdownContent
           align="center"
           className={cn(
-            "overflow-hidden rounded-[1.35rem] border border-stroke/80 bg-white/95 px-3.5 py-3 shadow-[0_22px_60px_rgba(18,51,38,0.18)] backdrop-blur-md",
-            "dark:border-dark-3/35 dark:bg-[#020814]/95 dark:shadow-[0_28px_80px_rgba(0,255,110,0.14)]",
-            "w-[min(24rem,calc(100vw-2rem))]",
-            "max-h-[min(32rem,calc(100vh-6rem))]",
+            "border border-stroke bg-white px-3.5 py-3 shadow-md dark:border-black dark:bg-black",
+            "w-[min(22rem,calc(100vw-2rem))]",
+            "max-h-[min(23rem,calc(100vh-8rem))] overflow-hidden",
             isMobile && "fixed left-1/2 top-20 -translate-x-1/2",
           )}
         >
-          <div className="mb-2 flex items-center justify-between rounded-2xl border border-stroke/70 bg-light-surface/80 px-3 py-2 dark:border-dark-3/30 dark:bg-dark-accent-soft/60">
-            <span className="text-lg font-semibold text-dark dark:text-white">
+          <div className="mb-1 flex items-center justify-between px-2 py-1.5">
+            <span className="text-lg font-medium text-dark dark:text-white">
               Notifiche
             </span>
 
-            <span className="rounded-full bg-primary px-2.5 py-1 text-xs font-semibold text-white shadow-[0_8px_18px_rgba(44,214,115,0.28)] dark:bg-dark-3 dark:text-dark">
+            <span className="rounded-md bg-primary px-[9px] py-0.5 text-xs font-medium text-white">
               {isAnyLoading ? "…" : totalCount}{" "}
               {totalCount === 1 ? "nuova" : "nuove"}
             </span>
           </div>
 
-          <ul
+          <AppScrollArea
             className={cn(
-              "atlas-scrollbar mb-1 overflow-y-auto overscroll-contain pr-2",
-              "max-h-[min(25rem,calc(100vh-11rem))]",
+              "mb-3 overscroll-contain pr-1",
+              "max-h-[18.5rem] min-[420px]:max-h-[23rem]",
               "[webkit-overflow-scrolling:touch]",
-              "space-y-1.5 scroll-py-2 pb-2",
+              "scroll-py-2 pb-4",
             )}
           >
+            <ul>
             {!isAuthed && (
               <li className="rounded-xl px-3 py-3 text-sm text-dark-5 dark:text-dark-6">
                 Effettua l’accesso per vedere le notifiche.
@@ -385,11 +386,11 @@ export function Notification() {
                 const dateLabel = formatDateLabel(item);
 
                 return (
-                  <li
-                    key={`${kind}:${typeSlug}:${item.id}`}
-                    role="menuitem"
-                    className="snap-start scroll-mt-2"
-                  >
+                <li
+                  key={`${kind}:${typeSlug}:${item.id}`}
+                  role="menuitem"
+                  className="scroll-mt-2"
+                >
                     <Link
                       href={href}
                       onClick={() => setIsOpen(false)}
@@ -424,7 +425,8 @@ export function Notification() {
 
             {/* ✅ Spacer finale: permette di scrollare fino a mostrare l’ultimo item intero */}
             <li aria-hidden="true" className="h-10" />
-          </ul>
+            </ul>
+          </AppScrollArea>
 
           <Link
             href="/profile"

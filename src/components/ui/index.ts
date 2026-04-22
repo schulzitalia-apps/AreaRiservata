@@ -18,6 +18,7 @@ export * from "./AppPropertyGrid";
 export * from "./AppSearchField";
 export * from "./AppSelect";
 export * from "./AppSkeleton";
+export * from "./AppScrollArea";
 export * from "./AppTable";
 export * from "./AppTag";
 export * from "./AppTextarea";
