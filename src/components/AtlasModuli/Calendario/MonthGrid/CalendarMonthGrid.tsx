@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useRef, useState, useCallback } from "react";
+import React, { useMemo, useRef, useState, useCallback, useEffect } from "react";
 import { cn } from "@/server-utils/lib/utils";
 import type { CalendarEventVM } from "../types";
 import EventLabelHover from "../Tools/EventLabelHover";
@@ -96,7 +96,7 @@ function MoreEventsPopover({
                              isoDay,
                              events,
                              label,
-                             maxWidth = "22rem",
+                             maxWidth = "min(24rem, calc(100vw - 1.5rem))",
                              getEventColor,
                              onEventMenu,
                            }: {
@@ -158,12 +158,15 @@ function MoreEventsPopover({
       >
         {({ placement: finalPlacement }) => (
           <Popover placement={finalPlacement} maxWidth={maxWidth} withConnector>
-            <div className="p-2">
-              <div className="mb-1 text-[11px] font-semibold text-gray-7 dark:text-white/80">
-                Altri appuntamenti
+            <div className="w-[min(24rem,calc(100vw-1.5rem))] p-2">
+              <div className="sticky top-0 z-[1] mb-2 flex items-center justify-between gap-3 rounded-xl bg-white/95 px-1 py-1 text-[11px] font-semibold text-gray-7 backdrop-blur dark:bg-gray-900/95 dark:text-white/80">
+                <span>Altri appuntamenti</span>
+                <span className="shrink-0 rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-white/10 dark:text-white/70">
+                  {events.length}
+                </span>
               </div>
 
-              <ul className="space-y-1">
+              <ul className="max-h-[min(26rem,calc(100vh-8rem))] space-y-1 overflow-y-auto overscroll-contain pr-1">
                 {events.map((ev, i) => {
                   const { isStart, isEnd, isMiddle } = segmentKindForDay(isoDay, ev);
                   const scheme = getEventColor(ev);
@@ -174,7 +177,7 @@ function MoreEventsPopover({
                         <button
                           type="button"
                           className={cn(
-                            "w-full text-left truncate rounded-md border px-2 py-1 text-xs transition",
+                            "w-full text-left truncate rounded-md border px-2 py-1.5 text-xs transition",
                             isMiddle ? scheme.pillMiddle : scheme.pillSolid,
                             !isStart && "rounded-l-none",
                             !isEnd && "rounded-r-none",
@@ -245,7 +248,7 @@ export default function CalendarMonthGrid({
   const [anchorISO, setAnchorISO] = useState<string | null>(null);
   const [hoverISO, setHoverISO] = useState<string | null>(null);
 
-  useMemo(() => {
+  useEffect(() => {
     setAnchorISO(null);
     setHoverISO(null);
   }, [month, createMode]);
