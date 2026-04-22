@@ -14,6 +14,7 @@ import type { AnagraficaPreview } from "@/components/Store/models/anagrafiche";
 
 import { useCrudPermissions } from "@/components/AtlasModuli/useCrudPermissions";
 import { useAppDispatch } from "@/components/Store/hooks";
+import { AppButton } from "@/components/ui";
 
 import {
   useReferenceBatchPreviewMulti,
@@ -21,6 +22,7 @@ import {
 } from "@/components/AtlasModuli/common/useReferenceBatchPreview";
 
 import { useAnagraficheList, type AnagraficaFilters } from "../useAnagraficheList";
+import { AnagraficheExportModal } from "./AnagraficheExportModal";
 import { AnagraficheListToolbar } from "./AnagraficheListToolbar";
 import { AnagraficheListTable } from "./AnagraficheListTable";
 
@@ -30,6 +32,7 @@ import {
   computeColumnKeys,
   formatFieldValue,
   resolveSlugConfig,
+  uniqFieldKeys,
   type AnagraficheListConfig,
 } from "./helpers";
 
@@ -62,6 +65,7 @@ export default function AnagraficheList({
   const [appliedQuery, setAppliedQuery] = useState("");
   const [docType, setDocType] = useState<string>("");
   const [ownerOnly, setOwnerOnly] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const [page, setPage] = useState(1);
   const pageSize = 25;
@@ -268,6 +272,18 @@ export default function AnagraficheList({
         onOwnerOnlyChange={setOwnerOnly}
         onSortByKey={onSortByKey}
         onPageChange={setPage}
+        toolbarRight={
+          <AppButton
+            type="button"
+            variant="outline"
+            tone="neutral"
+            size="sm"
+            className="font-semibold backdrop-blur-sm"
+            onClick={() => setExportOpen(true)}
+          >
+            Esporta
+          </AppButton>
+        }
       />
 
       <AnagraficheListTable
@@ -296,6 +312,18 @@ export default function AnagraficheList({
         canDelete={canDelete}
       />
       {/* pagination è già gestita in toolbar */}
+      <AnagraficheExportModal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        type={type}
+        def={def}
+        baseFilters={{
+          query: appliedQuery || undefined,
+          docType: docType || undefined,
+          visibilityRole: ownerOnly ? "OWNER" : undefined,
+        }}
+        defaultSelectedFields={uniqFieldKeys([...titleKeys, ...subtitleKeys, ...columnKeys])}
+      />
     </div>
   );
 }

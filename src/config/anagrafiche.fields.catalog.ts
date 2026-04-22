@@ -784,7 +784,18 @@ export const FIELD_CATALOG = {
     },
     statoAvanzamento: {
       label: "Stato di Avanzamento",
-      type: "text",
+      type: "select",
+      options: [
+        ["da_definire", "Da definire"],
+        ["Taglio", "Taglio"],
+        ["Vetraggio", "Vetraggio"],
+        ["Ferramenta", "Ferramenta"],
+        ["Accessori", "Accessori"],
+        ["Imballaggio", "Imballaggio"],
+        ["Pronto a Magazzino", "Pronto a Magazzino"],
+        ["Spedizione", "Spedizione"],
+        ["Consegna Prevista", "Consegna Prevista"],
+      ],
     },
 
     /* ------------------------------------------------------------------ */
