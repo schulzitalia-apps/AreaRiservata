@@ -32,68 +32,6 @@ export const ANAGRAFICHE_LIST_UI_BY_SLUG: Partial<
     hoverPreview: false,
   },
 
-  spese: {
-    variant: "comfortable",
-    main: {
-      title: fk("tipoSpesa", "servizioAbbonamento"),
-      subtitle: fk("descrizione"),
-      showOwner: false,
-      showDate: "updatedOrCreated",
-      referencePills: fk("fornitore", "dipendente"),
-    },
-    columns: {
-      mode: "custom",
-      keys: fk(
-        "dataSpesa",
-        "variantId",
-        "fornitore",
-        "totaleLordo",
-      ),
-      showVisibility: true,
-    },
-    controls: {
-      docType: true,
-      visibility: false,
-      sort: false,
-    },
-    hoverPreview: false
-  },
-
-  "anagrafiche-test": {
-    variant: "comfortable",
-    main: {
-      title: fk("titoloTestAnagrafica"),
-      subtitle: fk("flagAttivoTest"),
-      showOwner: true,
-      showDate: "updatedOrCreated",
-      referencePills: false,
-    },
-    columns: {
-      mode: "custom",
-      keys: fk(
-        "categorieTestMulti",
-        "etichetteLibereTest",
-        "clientiCollegatiTest",
-        "numeriTestArray",
-        "rangeNumeroTest",
-        "rangeDataTest",
-        "posizioneTestGeo",
-        "percorsoTestGeo",
-        "dimensioniTestPair",
-        "specificheTestPairs",
-        "metricheTestKeyValue",
-        "indirizzoTestStrutturato",
-        "noteTestAnagrafica",
-      ),
-      showVisibility: true,
-    },
-    controls: {
-      docType: true,
-      visibility: false,
-      sort: true,
-    },
-    hoverPreview: false,
-  },
 };
 
 export function getAnagraficheListUIConfig(
