@@ -97,7 +97,7 @@ export const inviteEmailTemplateConfig: InviteEmailTemplateConfig = {
   ctaIntroText: "Accedi ora all’Area Riservata:",
   expiresLabelText: "Il link di attivazione scade il:",
   ignoreText:
-    "Per qualsiasi necessità potrai comunque contattarci oppure utilizzare il sistema di ticket interno, che ti permetterà di ricevere assistenza in modo più rapido e tracciato.",
+    "Per qualsiasi necessità potrai comunque contattarci.",
   directLinkLabelText: "Link diretto:",
 
   // -------------------------
@@ -169,7 +169,6 @@ export const inviteEmailTemplateConfig: InviteEmailTemplateConfig = {
                 <li style="margin: 0 0 10px; line-height: 1.7;">scaricare listini, cataloghi e schede tecniche sempre aggiornati</li>
                 <li style="margin: 0 0 10px; line-height: 1.7;">consultare l’archivio delle tue commesse e scaricare conferme d’ordine e certificazioni</li>
                 <li style="margin: 0 0 10px; line-height: 1.7;">accedere ai materiali marketing ufficiali</li>
-                <li style="margin: 0; line-height: 1.7;">aprire richieste di assistenza tecnica o commerciale direttamente a Schulz</li>
               </ul>
             </div>
 
@@ -189,7 +188,7 @@ export const inviteEmailTemplateConfig: InviteEmailTemplateConfig = {
                 Attiva le credenziali
               </a>
               <p style="margin: 18px 0 0; font-size: 13px; line-height: 1.7; color: #d1d5db;">
-                Riceverai un link sulla tua mail e potrai attivare le credenziali. Mi raccomando, il link ha una durata di 48 ore.
+                Qua sotto trovi un link per attivare le tue credenziali. Mi raccomando, il link ha una durata di 48 ore.
               </p>
             </div>
 
