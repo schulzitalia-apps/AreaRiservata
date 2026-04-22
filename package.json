@@ -14,6 +14,7 @@
     "@aws-sdk/credential-provider-cognito-identity": "^3.917.0",
     "@aws-sdk/s3-request-presigner": "^3.917.0",
     "@reduxjs/toolkit": "^2.9.2",
+    "@types/leaflet": "^1.9.21",
     "@zxing/browser": "^0.1.5",
     "apexcharts": "^4.5.0",
     "bcrypt": "^6.0.0",
@@ -22,6 +23,7 @@
     "dayjs": "^1.11.13",
     "flatpickr": "^4.6.13",
     "jsvectormap": "^1.6.0",
+    "leaflet": "^1.9.4",
     "lucide-react": "^0.545.0",
     "mongoose": "^8.15.1",
     "next": "15.1.9",
@@ -34,6 +36,7 @@
     "react-redux": "^9.2.0",
     "resend": "^6.5.2",
     "tailwind-merge": "^2.6.0",
+    "three": "^0.183.2",
     "twilio": "^5.10.7"
   },
   "devDependencies": {
@@ -41,6 +44,7 @@
     "@types/node": "^22",
     "@types/react": "19.0.8",
     "@types/react-dom": "19.0.3",
+    "@types/three": "^0.183.1",
     "autoprefixer": "^10.4.20",
     "eslint": "^9",
     "eslint-config-next": "15.1.6",
@@ -48,6 +52,6 @@
     "prettier": "^3.4.2",
     "prettier-plugin-tailwindcss": "^0.6.11",
     "tailwindcss": "^3.4.16",
-    "typescript": "^5"
+    "typescript": "^5.9.3"
   }
 }
