@@ -291,6 +291,49 @@ export const EVENTO_TYPES: readonly PublicEventoTypeDef[] = [
     },
   },
 
+  //TRELLO LIKE
+  {
+    slug: "avanzamento-task",
+    label: "Timeline Task",
+    fields: [
+      "titolo",
+      "descrizione",
+      "stato",
+      "priorita",
+
+      "tipoTimelineTask",
+      "chainIdTimelineTask",
+      "sourceEventIdTimelineTask",
+      "attoriTimelineTask",
+      "payloadTimelineTask",
+    ],
+    preview: {
+      title: ["titolo"],
+      subtitle: ["tipoTimelineTask", "priorita"],
+      searchIn: [
+        "titolo",
+        "descrizione",
+        "tipoTimelineTask",
+        "attoriTimelineTask",
+        "chainIdTimelineTask",
+        "sourceEventIdTimelineTask",
+      ],
+    },
+    allowedAnagraficaTypes: ["task"],
+    allowedAulaTypes: ["sprint"],
+    allowedTimeKinds: ["point", "deadline"],
+    documentTypes: ["documento", "screenshot", "altro"],
+    detailCard: {
+      coverSrc: "/images/illustration/cover/cover-01.png",
+      avatarSrc: "/images/illustration/avatar/avatar-01.png",
+      headerVariant: "cover-avatar",
+      avatarSize: "medium",
+      hoverEffect: true,
+    },
+  },
+
+
+
 ] as const;
 
 export type EventoTypeSlug = (typeof EVENTO_TYPES)[number]["slug"];

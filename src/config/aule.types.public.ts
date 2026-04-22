@@ -128,6 +128,50 @@ export const AULE_TYPES: readonly PublicAulaTypeDef[] = [
       hoverEffect: true,
     },
   },
+
+  /* ------------------------------------------------------------------ */
+  /*                               SPRINT                               */
+  /* ------------------------------------------------------------------ */
+  {
+    slug: "sprint",
+    label: "Sprint",
+    // raggruppa Clienti
+    anagraficaSlug: "task",
+    creatorRoles: ["Super", "Amministrazione", "Commerciale", "Agente", "Custcare", "Tecnico"],
+
+    fields: [
+      "sprintLabel",
+      "inizioSprint",
+      "fineSprint",
+      "statoAvanzamento",
+      "valutazioneSprint",
+      "descrizioneSprint",
+      "obbiettiviSprint"
+    ],
+    partecipanteFields: [
+      "azioneAttesa"
+    ],
+
+    preview: {
+      title: ["sprintLabel"],
+      subtitle: ["inizioSprint", "fineSprint"],
+      searchIn: [
+        "sprintLabel",
+        "inizioSprint",
+        "fineSprint",
+        "statoAvanzamento",
+      ],
+    },
+
+    // stesso stile header per ora
+    detailCard: {
+      coverSrc: "/images/illustration/cover/cover-03.png",
+      avatarSrc: "/images/illustration/avatar/avatar-03.png",
+      headerVariant: "cover-avatar",
+      avatarSize: "medium",
+      hoverEffect: true,
+    },
+  },
 ] as const;
 
 export type AulaTypeSlug = (typeof AULE_TYPES)[number]["slug"];

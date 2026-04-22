@@ -1655,6 +1655,143 @@ export const FIELD_CATALOG = {
       type: "textarea",
     },
 
+  /* ------------------------------------------------------------------
+*  TRELLO-LIKE – TASK
+* ------------------------------------------------------------------ */
+
+  titoloTask: {
+    label: "Titolo Task",
+    type: "text",
+    max: 220,
+  },
+
+  sottotitoloTask: {
+    label: "Sottotitolo Task",
+    type: "text",
+    max: 260,
+  },
+
+  descrizioneTask: {
+    label: "Descrizione Task",
+    type: "textarea",
+    max: 5000,
+  },
+
+  obiettiviTask: {
+    label: "Obiettivi Task",
+    type: "textarea",
+    max: 5000,
+  },
+
+  ambitoTask: {
+    label: "Ambito Task",
+    type: "text",
+    max: 180,
+  },
+
+  statoTask: {
+    label: "Stato Task",
+    type: "select",
+    options: [
+      ["backlog", "Backlog"],
+      ["pianificato", "Pianificato"],
+      ["in_corso", "In corso"],
+      ["bloccato", "Bloccato"],
+      ["in_validazione", "In validazione"],
+      ["completato", "Completato"],
+      ["archiviato", "Archiviato"],
+    ],
+  },
+
+  tipoTask: {
+    label: "Tipo Task",
+    type: "select",
+    options: [
+      ["operations", "Operations"],
+      ["delivery", "Delivery"],
+      ["support", "Support"],
+      ["analysis", "Analysis"],
+      ["scrum", "Scrum"],
+    ],
+  },
+
+  prioritaTask: {
+    label: "Priorità Task",
+    type: "select",
+    options: [
+      ["urgent", "Urgent"],
+      ["high", "High"],
+      ["medium", "Medium"],
+      ["low", "Low"],
+    ],
+  },
+
+  titolareTask: {
+    label: "Titolare Task",
+    type: "reference",
+    reference: {
+      kind: "anagrafica",
+      targetSlug: "evolver",
+      resourceBasePath: "anagrafiche",
+      previewField: "nomeEvolver",
+    },
+  },
+
+  referenteTask: {
+    label: "Referente Task",
+    type: "reference",
+    reference: {
+      kind: "anagrafica",
+      targetSlug: "evolver",
+      resourceBasePath: "anagrafiche",
+      previewField: "nomeEvolver",
+    },
+  },
+
+  clienteTask: {
+    label: "Cliente Task",
+    type: "reference",
+    reference: {
+      kind: "anagrafica",
+      targetSlug: "clienti",
+      resourceBasePath: "anagrafiche",
+      previewField: "ragioneSociale",
+    },
+  },
+
+  fornitoreTask: {
+    label: "Fornitore Task",
+    type: "reference",
+    reference: {
+      kind: "anagrafica",
+      targetSlug: "fornitori",
+      resourceBasePath: "anagrafiche",
+      previewField: "ragioneSociale",
+    },
+  },
+
+  antologiaTask: {
+    label: "Antologia Task",
+    type: "text",
+    max: 180,
+  },
+
+  capitoloTask: {
+    label: "Capitolo Task",
+    type: "text",
+    max: 180,
+  },
+
+  conclusioneAttesa: {
+    label: "Conclusione Attesa",
+    type: "date",
+  },
+
+  conclusioneEffettiva: {
+    label: "Conclusione Effettiva",
+    type: "date",
+  },
+
     //VARIANTI ++++++++ GESTIONE VARIANTI A FE +++++++++++++++
 
     variantId: {

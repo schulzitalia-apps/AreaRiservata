@@ -524,6 +524,61 @@ export const ANAGRAFICA_TYPES: readonly PublicTypeDef[] = [
     },
   },
 
+  /* ------------------------------------------------------------------ */
+  /*                        TASK                                       */
+  /* ------------------------------------------------------------------ */
+
+  {
+    slug: "task",
+    label: "Task",
+    fields: [
+      "variantId",
+
+      "titoloTask",
+      "sottotitoloTask",
+      "descrizioneTask",
+      "obiettiviTask",
+
+      "ambitoTask",
+      "statoTask",
+      "tipoTask",
+      "prioritaTask",
+
+      "titolareTask",
+      "referenteTask",
+      "clienteTask",
+      "fornitoreTask",
+
+      "antologiaTask",
+      "capitoloTask",
+
+      "conclusioneAttesa",
+      "conclusioneEffettiva",
+    ],
+    documentTypes: ["documento", "nota"],
+    preview: {
+      title: ["titoloTask"],
+      subtitle: ["tipoTask", "prioritaTask", "titolareTask"],
+      searchIn: [
+        "titoloTask",
+        "sottotitoloTask",
+        "descrizioneTask",
+        "obiettiviTask",
+        "ambitoTask",
+        "statoTask",
+        "tipoTask",
+        "prioritaTask",
+        "antologiaTask",
+        "capitoloTask",
+      ],
+    },
+    accettaAule: true,
+    detailCard: {
+      headerVariant: "none",
+      hoverEffect: false,
+    },
+  },
+
 ] as const;
 
 export type AnagraficaTypeSlug =

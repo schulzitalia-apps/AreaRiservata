@@ -74,6 +74,55 @@ export const EVENTO_FIELD_CATALOG = {
       ["commerciale", "Avviso Commerciale"],
     ],
   },
+
+  tipoTimelineTask: {
+    label: "Tipo evento timeline task",
+    type: "select",
+    options: [
+      ["planned-start", "Pianificazione"],
+      ["start", "Inizio task"],
+      ["checkpoint", "Checkpoint"],
+      ["completion-update", "Checkpoint chiuso"],
+      ["block-update", "Checkpoint bloccato"],
+      ["expected-completion", "Attesa chiusura task"],
+      ["validation", "Validazione"],
+      ["completion", "Chiusura task"],
+      ["task-block", "Blocco task"],
+      ["reopen", "Riapertura"],
+      ["note", "Nota"],
+    ],
+  },
+
+  chainIdTimelineTask: {
+    label: "Chain ID timeline task",
+    type: "text",
+    max: 120,
+    locked: true,
+    hint: "Identificatore della catena logica dell'evento.",
+  },
+
+  sourceEventIdTimelineTask: {
+    label: "Source Event ID timeline task",
+    type: "text",
+    max: 120,
+    locked: true,
+    hint: "ID dell'evento sorgente collegato.",
+  },
+
+  attoriTimelineTask: {
+    label: "Attori timeline task",
+    type: "textarea",
+    max: 2000,
+    hint: "Nomi partecipanti/validatori/responsabili in formato testo libero o CSV.",
+  },
+
+  payloadTimelineTask: {
+    label: "Payload timeline task",
+    type: "textarea",
+    max: 20000,
+    locked: true,
+    hint: "JSON serializzato con checklist, validators, decisioni, esiti e metadati timeline.",
+  },
 } as const;
 
 export type EventoFieldKey = keyof typeof EVENTO_FIELD_CATALOG;

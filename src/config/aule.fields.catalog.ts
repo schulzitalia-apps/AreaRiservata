@@ -62,6 +62,42 @@ export const AULA_FIELD_CATALOG = {
     max: 40,
   },
 
+//Trello-Like: Sprint Concept
+  sprintLabel: {
+    label: "Sprint Label",
+    type: "text"
+  },
+  inizioSprint: {
+    label: "Inizio Sprint",
+    type: "date"
+  },
+  fineSprint: {
+    label: "Fine Sprint",
+    type: "date"
+  },
+  statoAvanzamento: {
+    label: "Stato Sprint",
+    type: "text",
+  },
+  valutazioneSprint: {
+    label: "Valutazione Sprint",
+    type: "select",
+    options: [
+      ["obbiettivi non raggiunti", "Obbiettivi non Raggiunti"],
+      ["obbiettivi parzialmente raggiunti", "Obbiettivi Parzialmente Raggiunti"],
+      ["obbiettivi totalmente raggiunti", "Obbiettivi Totalmente Raggiunti"],
+      ["aspettative superate", "Aspettative Superate"],
+    ]
+  },
+  descrizioneSprint: {
+    label: "Descrizione Sprint",
+    type: "textarea"
+  },
+  obbiettiviSprint: {
+    label: "Obbiettivi Sprint",
+    type: "textarea"
+  }
+
 } as const;
 
 export type AulaFieldKey = keyof typeof AULA_FIELD_CATALOG;
@@ -102,6 +138,10 @@ export const AULA_PARTECIPANTE_FIELD_CATALOG = {
     label: "Voto Ottenuto",
     type: "number",
   },
+  azioneAttesa: {
+    label: "Azione Attesa",
+    type: "text",
+  }
 } as const;
 
 export type AulaPartecipanteFieldKey =
