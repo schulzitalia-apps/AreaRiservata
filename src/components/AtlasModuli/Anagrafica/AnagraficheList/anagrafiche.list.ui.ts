@@ -13,14 +13,14 @@ export const ANAGRAFICHE_LIST_UI_BY_SLUG: Partial<
     variant: "comfortable",
     main: {
       title: fk("ragioneSociale"),
-      subtitle: fk("citta", "email"),
+      subtitle: fk(),
       showOwner: false,
       showDate: false,
       referencePills: false,
     },
     columns: {
       mode: "custom",
-      keys: fk(),
+      keys: fk("citta", "email"),
       showVisibility: false,
     },
     controls: {
@@ -33,15 +33,15 @@ export const ANAGRAFICHE_LIST_UI_BY_SLUG: Partial<
   "conferme-ordine": {
     variant: "comfortable",
     main: {
-      title: fk("riferimento"),
-      subtitle: fk("numeroOrdine"),
+      title: fk("codiceCliente"),
+      subtitle: fk("riferimento"),
       showOwner: false,
       showDate: false,
       referencePills: false,
     },
     columns: {
       mode: "custom",
-      keys: fk("inizioConsegna"),
+      keys: fk("numeroOrdine", "riferimento", "inizioConsegna"),
       showVisibility: false,
     },
     controls: {
