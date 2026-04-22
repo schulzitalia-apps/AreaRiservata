@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import twilio from "twilio";
 
-import { connectToDatabase } from "@/server-utils/lib/mongoose-connection";
-import { AnimaMemoryModel } from "@/server-utils/anima-mini/animaMemory";
-
-import { getUserProfile } from "@/server-utils/anima/botConfig";
-import { chatOnce } from "@/server-utils/anima-mini/chatOnce"; // <-- adatta il path al tuo progetto
+import { runAnima } from "@/server-utils/anima/runAnima";
+import { resolveAnimaPhoneIdentity } from "@/server-utils/anima/context/channelIdentity";
 
 export const runtime = "nodejs";
 
@@ -13,21 +10,12 @@ const {
   TWILIO_ACCOUNT_SID,
   TWILIO_AUTH_TOKEN,
   TWILIO_WHATSAPP_NUMBER,
-  GROQ_API_KEY,
 } = process.env;
 
 const twilioClient =
   TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN
     ? twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
     : null;
-
-function buildWelcomeMessage(userName?: string) {
-  const nome = userName ? ` *${userName}*` : "";
-  return (
-    `Ciao${nome}!\n` +
-    `Dimmi pure cosa ti serve e ti rispondo subito.\n\n`
-  );
-}
 
 async function sendWhatsappMessage(to: string, body: string) {
   if (!twilioClient) throw new Error("TWILIO_CLIENT_NOT_CONFIGURED");
@@ -68,18 +56,30 @@ export async function POST(req: NextRequest) {
     // Twilio a volte manda webhook “vuoti” o con campi mancanti: rispondi 200.
     if (!from || !body) return new NextResponse(null, { status: 200 });
 
-    if (!GROQ_API_KEY) throw new Error("GROQ_API_KEY_MISSING");
+    const identity = await resolveAnimaPhoneIdentity(from);
 
-    const userId = from; // per WhatsApp: "whatsapp:+39..."
-    const userProfile = getUserProfile(userId);
+    if (!identity.matched) {
+      return new NextResponse(null, { status: 200 });
+    }
 
     // 1) capiamo se è la prima volta: controlliamo se esiste un doc memoria
-    await connectToDatabase();
-    const exists = await AnimaMemoryModel.exists({ _id: userId });
+    const result = await runAnima({
+      input: {
+        userId: identity.userId,
+        sessionId: identity.sessionId,
+        message: body,
+        channel: "twilio_whatsapp",
+        language: "it",
+        user: identity.user,
+        auth: identity.auth,
+      },
+    });
 
-    // 2) primo contatto: welcome senza LLM
+    await sendWhatsappMessage(from, result.reply.text || "Ok.");
+    return new NextResponse(null, { status: 200 });
+    /*
     if (!exists) {
-      const welcome = buildWelcomeMessage(userProfile.name);
+      const _legacyWelcome = result.reply.text;
 
       // IMPORTANTISSIMO: creiamo una summary iniziale, così non rimandiamo welcome al prossimo msg
       await AnimaMemoryModel.updateOne(
@@ -96,16 +96,16 @@ export async function POST(req: NextRequest) {
       return new NextResponse(null, { status: 200 });
     }
 
-    // 3) altrimenti: passa ad anima-mini
-    const { reply } = await chatOnce({
+    */
+    /* const { reply } = await chatOnce({
       userId,
       userMessage: body,
       groqApiKey: GROQ_API_KEY,
       language: "it",
-    });
+    }); */
 
-    await sendWhatsappMessage(from, reply || "Ok! 👍");
-    return new NextResponse(null, { status: 200 });
+    /* await sendWhatsappMessage(from, reply || "Ok! 👍");
+    return new NextResponse(null, { status: 200 }); */
   } catch (err: any) {
     console.error("Errore webhook Twilio:", err?.message || err);
     // Twilio spesso preferisce 200 per non ritentare in loop,

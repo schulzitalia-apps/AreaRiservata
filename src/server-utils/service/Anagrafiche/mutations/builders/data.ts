@@ -32,11 +32,31 @@ function isEmptyValue(v: any): boolean {
   return false;
 }
 
+function normalizeNumericString(raw: string): string {
+  const compact = raw.trim().replace(/\s+/g, "");
+  if (!compact) return "";
+
+  const hasComma = compact.includes(",");
+  const dotCount = (compact.match(/\./g) ?? []).length;
+
+  if (hasComma) {
+    return compact.replace(/\./g, "").replace(",", ".");
+  }
+
+  if (dotCount > 1) {
+    const parts = compact.split(".");
+    const decimal = parts.pop() ?? "";
+    return `${parts.join("")}.${decimal}`;
+  }
+
+  return compact;
+}
+
 function toNumber(v: any): number | null {
   if (v === undefined || v === null) return null;
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
   if (typeof v === "string") {
-    const s = v.trim().replace(",", ".");
+    const s = normalizeNumericString(v);
     if (!s) return null;
     const n = Number(s);
     return Number.isFinite(n) ? n : null;

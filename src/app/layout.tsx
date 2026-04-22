@@ -1,5 +1,6 @@
 import "@/design/css/satoshi.css";
 import "@/design/css/style.css";
+import "leaflet/dist/leaflet.css";
 
 import { Sidebar } from "@/components/Layouts/sidebar";
 import "flatpickr/dist/flatpickr.min.css";

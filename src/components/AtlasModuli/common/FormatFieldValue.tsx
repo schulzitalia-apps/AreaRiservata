@@ -212,6 +212,145 @@ function renderText(raw: any, ov?: FieldOverride): React.ReactNode {
   return s;
 }
 
+function renderBoolean(raw: any): React.ReactNode {
+  if (raw === null || raw === undefined || raw === "") return "—";
+
+  const normalized =
+    typeof raw === "boolean"
+      ? raw
+      : typeof raw === "string"
+        ? raw.trim().toLowerCase() === "true"
+        : Boolean(raw);
+
+  return (
+    <span className="inline-flex rounded-md border border-stroke bg-gray-2 px-2 py-1 text-[11px] font-medium text-dark dark:border-dark-3 dark:bg-dark-2 dark:text-white">
+      {normalized ? "Sì" : "No"}
+    </span>
+  );
+}
+
+function selectLabel(fieldDef: FieldDef, raw: any): string {
+  const value = String(raw ?? "");
+  if (!value) return "";
+  const opt = fieldDef.options?.find(([optValue]) => optValue === value);
+  return opt ? opt[1] : value;
+}
+
+function renderStringArray(values: string[]): React.ReactNode {
+  if (!values.length) return "—";
+
+  return (
+    <div className="flex flex-wrap justify-center gap-1">
+      {values.map((value, index) => (
+        <span
+          key={`${value}__${index}`}
+          className="inline-flex rounded-md border border-stroke bg-gray-2 px-2 py-1 text-[11px] font-medium text-dark dark:border-dark-3 dark:bg-dark-2 dark:text-white"
+        >
+          {value}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function renderRangeNumber(raw: any): string {
+  if (!raw || typeof raw !== "object") return "—";
+  const from = asNumber((raw as any).from);
+  const to = asNumber((raw as any).to);
+  if (from === null || to === null) return "—";
+  return `${formatNumber(from)} - ${formatNumber(to)}`;
+}
+
+function renderRangeDate(raw: any): string {
+  if (!raw || typeof raw !== "object") return "—";
+  const start = asDate((raw as any).start);
+  const end = asDate((raw as any).end);
+  if (!start || !end) return "—";
+  return `${formatDateTime(start, { kind: "datetime", format: "date" } as any)} - ${formatDateTime(end, { kind: "datetime", format: "date" } as any)}`;
+}
+
+function renderGeoPoint(raw: any): string {
+  if (!raw || typeof raw !== "object") return "—";
+  const lat = asNumber((raw as any).lat);
+  const lng = asNumber((raw as any).lng);
+  if (lat === null || lng === null) return "—";
+  return `${lat}, ${lng}`;
+}
+
+function renderPairNumber(raw: any): string {
+  if (!raw || typeof raw !== "object") return "—";
+  const a = asNumber((raw as any).a);
+  const b = asNumber((raw as any).b);
+  if (a === null || b === null) return "—";
+  return `${formatNumber(a)} × ${formatNumber(b)}`;
+}
+
+function renderLabelValuePairs(raw: any): React.ReactNode {
+  if (!Array.isArray(raw) || raw.length === 0) return "—";
+
+  const rows = raw
+    .filter((item) => item && typeof item === "object")
+    .map((item) => ({
+      label: String((item as any).label ?? "").trim(),
+      value: String((item as any).value ?? "").trim(),
+    }))
+    .filter((item) => item.label && item.value);
+
+  if (!rows.length) return "—";
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      {rows.map((row, index) => (
+        <div key={`${row.label}__${index}`} className="text-center">
+          <span className="text-dark/60 dark:text-white/60">{row.label}: </span>
+          <span className="font-medium">{row.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function renderKeyValueNumber(raw: any): React.ReactNode {
+  if (!Array.isArray(raw) || raw.length === 0) return "—";
+
+  const rows = raw
+    .filter((item) => item && typeof item === "object")
+    .map((item) => ({
+      key: String((item as any).key ?? "").trim(),
+      value: asNumber((item as any).value),
+    }))
+    .filter((item) => item.key && item.value !== null) as Array<{ key: string; value: number }>;
+
+  if (!rows.length) return "—";
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      {rows.map((row, index) => (
+        <div key={`${row.key}__${index}`} className="text-center">
+          <span className="text-dark/60 dark:text-white/60">{row.key}: </span>
+          <span className="font-medium">{formatNumber(row.value)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function renderAddress(raw: any): React.ReactNode {
+  if (!raw || typeof raw !== "object") return "—";
+
+  const parts = [
+    String((raw as any).street ?? "").trim(),
+    String((raw as any).extra ?? "").trim(),
+    [String((raw as any).zip ?? "").trim(), String((raw as any).city ?? "").trim()].filter(Boolean).join(" "),
+    String((raw as any).province ?? "").trim(),
+    String((raw as any).country ?? "").trim(),
+  ].filter(Boolean);
+
+  if (!parts.length) return "—";
+
+  return <span className="whitespace-pre-line">{parts.join("\n")}</span>;
+}
+
 export function formatFieldValue(
   raw: any,
   fieldDef: FieldDef,
@@ -231,6 +370,43 @@ export function formatFieldValue(
   if (fieldDef.type === "number") return formatNumber(raw, override);
   if (fieldDef.type === "date") return formatDateTime(raw, { ...override, format: override?.format ?? "date", kind: "datetime" });
   if (fieldDef.type === "textarea") return renderText(raw, { ...override, format: override?.format ?? "longtext", kind: "text" });
+  if (fieldDef.type === "select") return selectLabel(fieldDef, raw);
+  if (fieldDef.type === "boolean") return renderBoolean(raw);
+  if (fieldDef.type === "multiselect") {
+    const labels = Array.isArray(raw)
+      ? raw
+        .map((value) => selectLabel(fieldDef, value))
+        .filter(Boolean)
+      : [];
+    return renderStringArray(labels);
+  }
+  if (fieldDef.type === "labelArray") {
+    const labels = Array.isArray(raw)
+      ? raw
+          .map((value) => String(value ?? "").trim())
+          .filter(Boolean)
+      : [];
+    return renderStringArray(labels);
+  }
+  if (fieldDef.type === "numberArray") {
+    const values = Array.isArray(raw)
+      ? raw.map((value) => formatNumber(value)).filter(Boolean)
+      : [];
+    return renderStringArray(values);
+  }
+  if (fieldDef.type === "rangeNumber") return renderRangeNumber(raw);
+  if (fieldDef.type === "rangeDate") return renderRangeDate(raw);
+  if (fieldDef.type === "geoPoint") return renderGeoPoint(raw);
+  if (fieldDef.type === "geoPointArray") {
+    const values = Array.isArray(raw)
+      ? raw.map((item) => renderGeoPoint(item)).filter((item) => item !== "—")
+      : [];
+    return renderStringArray(values);
+  }
+  if (fieldDef.type === "pairNumber") return renderPairNumber(raw);
+  if (fieldDef.type === "labelValuePairs") return renderLabelValuePairs(raw);
+  if (fieldDef.type === "keyValueNumber") return renderKeyValueNumber(raw);
+  if (fieldDef.type === "address") return renderAddress(raw);
 
   // per text/tel/email ecc: se vuoi, puoi anche mappare automaticamente
   if (fieldDef.type === "email") return renderText(raw, { ...override, kind: "text", format: override?.format ?? "email" });

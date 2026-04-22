@@ -183,16 +183,16 @@ export function EditPartecipantiPanel<P extends BasePartecipante>({
       </div>
 
       {/* GRID SINISTRA / DESTRA */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-2">
         {/* LEFT: ANAGRAFICHE DISPONIBILI */}
-        <div className="rounded-lg border border-stroke p-3 dark:border-dark-3">
-          <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex flex-col rounded-lg border border-stroke p-3 dark:border-dark-3">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <span className="text-sm font-semibold text-dark dark:text-white">
               {activeTypeLabel} disponibili
             </span>
 
             <input
-              className="w-40 rounded-lg border border-stroke bg-transparent px-2 py-1 text-xs text-dark outline-none focus:border-primary dark:border-dark-3 dark:text-white"
+              className="min-w-0 flex-1 rounded-lg border border-stroke bg-transparent px-2 py-1 text-xs text-dark outline-none focus:border-primary dark:border-dark-3 dark:text-white sm:max-w-[160px]"
               placeholder="Cerca…"
               value={availableQuery}
               onChange={(e) => onChangeAvailableQuery(e.target.value)}
@@ -249,20 +249,21 @@ export function EditPartecipantiPanel<P extends BasePartecipante>({
                     </div>
                   )}
 
-                  <div className="space-y-2">
-                    {items.map((p) => {
-                      const preview = previewById[p.anagraficaId];
-                      const displayName =
-                        preview?.displayName ?? p.anagraficaId;
-                      const subtitle = preview?.subtitle ?? "";
-                      const rowKey = buildRowKey(p);
-                      const isOpen = !!openMap[rowKey];
+                    <div className="space-y-2">
+                      {items.map((p, idx) => {
+                        const preview = previewById[p.anagraficaId];
+                        const displayName =
+                          preview?.displayName ?? p.anagraficaId;
+                        const subtitle = preview?.subtitle ?? "";
+                        const rowKey = buildRowKey(p);
+                        const uniqueKey = `${rowKey}-${idx}`;
+                        const isOpen = !!openMap[rowKey];
 
-                      return (
-                        <div
-                          key={rowKey}
-                          className="rounded border border-stroke bg-white px-3 py-2 text-xs text-dark shadow-sm dark:border-dark-3 dark:bg-gray-dark dark:text-white"
-                        >
+                        return (
+                          <div
+                            key={uniqueKey}
+                            className="rounded border border-stroke bg-white px-3 py-2 text-xs text-dark shadow-sm dark:border-dark-3 dark:bg-gray-dark dark:text-white"
+                          >
                           {/* HEADER RIGA: freccia + nome + rimuovi */}
                           <div className="mb-1 flex items-center justify-between gap-2">
                             <button

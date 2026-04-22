@@ -68,7 +68,7 @@ export default async function Page({
                   {/* mini avatar per ogni bullet */}
                   <div className="absolute -left-3 -top-3 h-8 w-8 overflow-hidden rounded-full border-2 border-gray-200 bg-gray-100 shadow-sm dark:border-dark-3 dark:bg-dark-2">
                     <Image
-                      src={`/images/user/user-${(idx % 6) + 2}.png`}
+                      src="/images/home/home-01.png"
                       alt="Bullet avatar"
                       width={60}
                       height={60}
@@ -116,7 +116,7 @@ export default async function Page({
         {/* 2. PILASTRI DI VALORE */}
         <FloatingSection
           coverSrc="/images/cover/cover-04.png"
-          avatarSrc="/images/home/home-02.png"
+          avatarSrc="/images/home/home-01.png"
           title="Come organizziamo il tuo ecosistema"
           subtitle="I quattro pilastri della piattaforma"
         >
@@ -135,7 +135,7 @@ export default async function Page({
                 >
                   <div className="absolute -top-4 left-4 h-9 w-9 overflow-hidden rounded-full border-2 border-gray-200 bg-gray-100 shadow-sm dark:border-dark-3 dark:bg-dark-2">
                     <Image
-                      src={`/images/home/home-0` + (index+1) + `.png`}
+                      src="/images/home/home-01.png"
                       alt={pillar.title}
                       width={60}
                       height={60}
@@ -159,7 +159,7 @@ export default async function Page({
         {/* 4. ECONOMICS */}
         <FloatingSection
           coverSrc="/images/cover/cover-02.png"
-          avatarSrc="/images/user/user-16.png"
+          avatarSrc="/images/home/home-01.png"
           title={homepageConfig.economicsSection.title}
           subtitle="Impatto economico"
         >
@@ -180,7 +180,7 @@ export default async function Page({
         {/* 5. TECNOLOGIA */}
         <FloatingSection
           coverSrc="/images/cover/cover-06.png"
-          avatarSrc="/images/home/home-04.png"
+          avatarSrc="/images/home/home-01.png"
           title={homepageConfig.techSection.title}
           subtitle="Architettura e stack"
         >
@@ -204,7 +204,7 @@ export default async function Page({
         {/* 6. PROTEZIONE DATI */}
         <FloatingSection
           coverSrc="/images/cover/cover-07.png"
-          avatarSrc="/images/user/user-17.png"
+          avatarSrc="/images/home/home-01.png"
           title={homepageConfig.dataSecuritySection.title}
           subtitle="Protezione dati & GDPR"
         >
@@ -260,7 +260,7 @@ export default async function Page({
         {/* 7. CTA FINALE */}
         <FloatingSection
           coverSrc="/images/cover/cover-01.png"
-          avatarSrc="/images/user/user-18.png"
+          avatarSrc="/images/home/home-01.png"
           title={homepageConfig.finalCta.title}
           subtitle="Parliamone davvero"
         >
@@ -275,7 +275,7 @@ export default async function Page({
             <p className="mb-3 text-sm">
               {homepageConfig.finalCta.body}
             </p>
-            <div className="flex flex-wrap gap-2 justify-center">
+            <div className="flex flex-wrap justify-center gap-2">
               <Link
                 href={homepageConfig.finalCta.primaryCta.href}
                 className="
@@ -287,7 +287,6 @@ export default async function Page({
               >
                 {homepageConfig.finalCta.primaryCta.label}
               </Link>
-
             </div>
           </div>
         </FloatingSection>

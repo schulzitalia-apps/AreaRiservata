@@ -29,6 +29,10 @@ type VariantConfigDTO = {
 };
 
 type VariantOption = { variantId: string; label: string };
+type PendingAttachment = EditAttachment & {
+  file: File;
+  pending: true;
+};
 
 function normId(x: string) {
   return String(x || "").trim().toLowerCase();
@@ -88,6 +92,7 @@ export default function AnagraficaEdit({
   const isNew = !id;
 
   const [saving, setSaving] = useState(false);
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
 
   // Variants
   const [variants, setVariants] = useState<VariantConfigDTO[]>([]);
@@ -219,7 +224,7 @@ export default function AnagraficaEdit({
     if (isNew) {
       return {
         data: {},
-        visibilityRole: "", // ✅ solo proprietario
+        visibilityRoles: [],
       };
     }
 
@@ -227,19 +232,20 @@ export default function AnagraficaEdit({
     const dataPicked = pickFields(dataAll, visibleFieldKeys);
     return {
       data: dataPicked,
-      visibilityRole: (selected as any)?.visibilityRole ?? null,
+      visibilityRoles: Array.isArray((selected as any)?.visibilityRoles)
+        ? (selected as any).visibilityRoles
+        : [],
     };
   }, [isNew, selected, visibleFieldKeys]);
 
-  // ✅ attachments: in NEW vuoto (lo store potrebbe avere roba vecchia)
   const attachments = useMemo(() => {
-    if (isNew) return [] as EditAttachment[];
-    return (((selected as any)?.attachments ?? []) as EditAttachment[]);
-  }, [isNew, selected]);
+    const persisted = isNew ? [] : (((selected as any)?.attachments ?? []) as EditAttachment[]);
+    return [...pendingAttachments, ...persisted] as EditAttachment[];
+  }, [isNew, selected, pendingAttachments]);
 
   const handleSubmit = async (payload: {
     data: Record<string, any>;
-    visibilityRole: string | null;
+    visibilityRoles: string[];
   }) => {
     setSaving(true);
     try {
@@ -257,7 +263,7 @@ export default function AnagraficaEdit({
             id,
             data: {
               data: mergedData,
-              visibilityRole: payload.visibilityRole,
+              visibilityRoles: payload.visibilityRoles,
             },
           }),
         ).unwrap();
@@ -270,12 +276,23 @@ export default function AnagraficaEdit({
             type,
             payload: {
               data: mergedData,
-              visibilityRole: payload.visibilityRole,
+              visibilityRoles: payload.visibilityRoles,
             },
           }),
         ).unwrap();
 
         const newId = (res as any).id;
+        for (const pending of pendingAttachments) {
+          const fd = new FormData();
+          fd.append("file", pending.file, pending.file.name);
+          fd.append("attachmentType", pending.type);
+          fd.append("category", pending.document?.category || pending.type);
+          fd.append("title", pending.document?.title || pending.file.name);
+          await dispatch(
+            uploadAnagraficaAttachment({ type, id: newId, form: fd }),
+          ).unwrap();
+        }
+        setPendingAttachments([]);
         window.location.href = `/anagrafiche/${type}/${newId}`;
         return;
       }
@@ -349,9 +366,33 @@ export default function AnagraficaEdit({
       <EditAttachmentsPanel
         documentTypes={def.documentTypes}
         attachments={attachments}
-        canUpload={!!id}
+        uploadHint={
+          isNew
+            ? "I documenti aggiunti ora restano in coda locale e verranno caricati quando salvi la nuova anagrafica."
+            : undefined
+        }
         onUpload={async ({ file, attachmentType, title }) => {
-          if (!id) return;
+          if (!id) {
+            const tempId = `pending:${Date.now()}:${file.name}`;
+            setPendingAttachments((prev) => [
+              {
+                _id: tempId,
+                type: attachmentType,
+                uploadedAt: new Date().toISOString(),
+                documentId: tempId,
+                document: {
+                  id: tempId,
+                  title: title || file.name,
+                  category: attachmentType,
+                },
+                href: null,
+                file,
+                pending: true,
+              },
+              ...prev,
+            ]);
+            return;
+          }
           const fd = new FormData();
           fd.append("file", file, file.name);
           fd.append("attachmentType", attachmentType);
@@ -362,7 +403,10 @@ export default function AnagraficaEdit({
           ).unwrap();
         }}
         onDelete={async (attId) => {
-          if (!id) return;
+          if (!id) {
+            setPendingAttachments((prev) => prev.filter((att) => att._id !== attId));
+            return;
+          }
           await dispatch(
             deleteAnagraficaAttachment({
               type,

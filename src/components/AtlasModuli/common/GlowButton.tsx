@@ -2,8 +2,8 @@
 "use client";
 
 import type { ButtonHTMLAttributes, ReactNode } from "react";
-import Link from "next/link";
-import clsx from "clsx";
+import { AppButton, AppLinkButton } from "@/components/ui";
+import { cn } from "@/server-utils/lib/utils";
 
 type GlowColor = "primary" | "success" | "danger" | "neutral" | "rose";
 type GlowSize = "sm" | "md";
@@ -37,81 +37,68 @@ export function GlowButton(props: GlowButtonProps) {
     size = "sm",
     className,
     disabled,
-    ...rest
-  } = props as any;
+  } = props;
 
-  const base =
-    "inline-flex items-center justify-center rounded-lg font-medium " +
-    "transition-all duration-150 backdrop-blur-sm " +
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent " +
-    "disabled:cursor-not-allowed disabled:opacity-60 " +
-    "hover:scale-[1.02] hover:animate-pulse-slow active:scale-100";
+  const toneMap: Record<GlowColor, "primary" | "neutral" | "success" | "danger"> = {
+    primary: "primary",
+    success: "success",
+    danger: "danger",
+    neutral: "neutral",
+    rose: "danger",
+  };
 
-  const sizeCls =
-    size === "md"
-      ? "px-4 py-2 text-sm"
-      : "px-3 py-1.5 text-xs"; // sm default
+  const sizeMap: Record<GlowSize, "sm" | "md"> = {
+    sm: "sm",
+    md: "md",
+  };
 
-  let colorCls = "";
-  switch (color) {
-    case "success":
-      colorCls =
-        "border-emerald-500/60 bg-emerald-500/10 text-emerald-500 " +
-        "hover:bg-emerald-500/20 hover:shadow-[0_0_16px_rgba(16,185,129,0.45)] " +
-        "focus-visible:ring-emerald-400/60 " +
-        "dark:border-emerald-400/60 dark:bg-emerald-400/15 dark:text-emerald-200 dark:hover:bg-emerald-400/25";
-      break;
-    case "danger":
-      colorCls =
-        "border-red-500/70 bg-red-500/10 text-red-400 " +
-        "hover:bg-red-500/20 hover:shadow-[0_0_16px_rgba(239,68,68,0.45)] " +
-        "focus-visible:ring-red-400/60 " +
-        "dark:border-red-400/70 dark:bg-red-400/15 dark:text-red-100 dark:hover:bg-red-400/25";
-      break;
-    case "neutral":
-      colorCls =
-        "border-slate-400/60 bg-slate-200/20 text-slate-700 " +
-        "hover:bg-slate-200/40 hover:shadow-[0_0_12px_rgba(148,163,184,0.4)] " +
-        "focus-visible:ring-slate-400/60 " +
-        "dark:border-slate-400/60 dark:bg-slate-600/20 dark:text-slate-100 dark:hover:bg-slate-600/40";
-      break;
-    case "rose":
-      colorCls =
-        "border-rose-500/70 bg-rose-500/10 text-rose-500 " +
-        "hover:bg-rose-500/20 hover:shadow-[0_0_16px_rgba(244,63,94,0.45)] " +
-        "focus-visible:ring-rose-400/60 " +
-        "dark:border-rose-400/70 dark:bg-rose-400/15 dark:text-rose-100 dark:hover:bg-rose-400/25";
-      break;
-    case "primary":
-    default:
-      colorCls =
-        "border-primary/70 bg-primary/10 text-primary " +
-        "hover:bg-primary/20 hover:shadow-[0_0_16px_rgba(59,130,246,0.45)] " +
-        "focus-visible:ring-primary/60 " +
-        "dark:border-primary/60 dark:bg-primary/20 dark:text-primary-100 dark:hover:bg-primary/30";
-      break;
-  }
+  const glowClassMap: Record<GlowColor, string> = {
+    primary:
+      "backdrop-blur-sm hover:scale-[1.02] active:scale-100 hover:shadow-[0_0_16px_rgba(59,130,246,0.45)] dark:hover:shadow-[0_0_16px_rgba(59,130,246,0.38)]",
+    success:
+      "backdrop-blur-sm hover:scale-[1.02] active:scale-100 hover:shadow-[0_0_16px_rgba(16,185,129,0.45)] dark:hover:shadow-[0_0_16px_rgba(16,185,129,0.38)]",
+    danger:
+      "backdrop-blur-sm hover:scale-[1.02] active:scale-100 hover:shadow-[0_0_16px_rgba(239,68,68,0.45)] dark:hover:shadow-[0_0_16px_rgba(239,68,68,0.38)]",
+    neutral:
+      "backdrop-blur-sm hover:scale-[1.02] active:scale-100 hover:shadow-[0_0_12px_rgba(148,163,184,0.35)] dark:hover:shadow-[0_0_12px_rgba(148,163,184,0.28)]",
+    rose:
+      "backdrop-blur-sm hover:scale-[1.02] active:scale-100 border-rose-500/45 text-rose-600 hover:bg-rose-500/10 hover:shadow-[0_0_16px_rgba(244,63,94,0.45)] dark:border-rose-400/45 dark:text-rose-100 dark:hover:bg-rose-400/15 dark:hover:shadow-[0_0_16px_rgba(244,63,94,0.35)]",
+  };
 
-  const classes = clsx(base, sizeCls, colorCls, className);
+  const classes = cn(glowClassMap[color], className);
 
   if ("href" in props && props.href) {
-    const { href, onClick, target, rel } = props as LinkProps;
+    const { href, onClick, target, rel } = props;
 
     return (
-      <Link href={href} className={classes} onClick={onClick} target={target} rel={rel}>
+      <AppLinkButton
+        href={href}
+        onClick={onClick}
+        target={target}
+        rel={rel}
+        variant="outline"
+        tone={toneMap[color]}
+        size={sizeMap[size]}
+        className={classes}
+      >
         {children}
-      </Link>
+      </AppLinkButton>
     );
   }
 
+  const { href: _href, ...buttonProps } = props as ButtonProps;
+
   return (
-    <button
-      type={(rest.type as any) ?? "button"}
+    <AppButton
+      type={buttonProps.type ?? "button"}
       disabled={disabled}
+      variant="outline"
+      tone={toneMap[color]}
+      size={sizeMap[size]}
       className={classes}
-      {...rest}
+      {...buttonProps}
     >
       {children}
-    </button>
+    </AppButton>
   );
 }

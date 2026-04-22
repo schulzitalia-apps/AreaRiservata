@@ -7,18 +7,44 @@ import type { AppRole } from "@/types/roles";
 
 import RoleSelect from "../ui/RoleSelect";
 import UserAnagraficaManager from "../modals/UserAnagraficaManager";
+import UserAulaManager from "../modals/UserAulaManager";
 import UserBarcodeActionManager from "../modals/UserBarcodeActionManager";
 
-import { apiDeleteUser, apiListUsers, apiUpdateUserRole } from "../api";
+import { apiDeleteUser, apiListUsers, apiRegenerateInvite, apiUpdateUserRole } from "../api";
 import { ResourceListBox, Column } from "@/components/AtlasModuli/common/ResourceListBox"; // <-- adatta se serve
 
-export default function UsersListBox({ onNotice }: { onNotice: (n: Notice) => void }) {
+export default function UsersListBox({
+  onNotice,
+  refreshToken,
+}: {
+  onNotice: (n: Notice) => void;
+  refreshToken?: number;
+}) {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
 
   const [users, setUsers] = useState<UserAdmin[]>([]);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+
+  function formatInviteCountdown(user: UserAdmin) {
+    if (user.approved !== false) return null;
+    if (!user.pendingInviteExpiresAt) return "Invito non ancora generato";
+    if (user.pendingInviteExpired) return "Invito scaduto";
+
+    const diffMs = new Date(user.pendingInviteExpiresAt).getTime() - Date.now();
+    if (!Number.isFinite(diffMs) || diffMs <= 0) return "Invito scaduto";
+
+    const totalMinutes = Math.ceil(diffMs / 60000);
+    const days = Math.floor(totalMinutes / (60 * 24));
+    const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+    const minutes = totalMinutes % 60;
+
+    if (days > 0) return `Invito: scade tra ${days}g ${hours}h`;
+    if (hours > 0) return `Invito: scade tra ${hours}h ${minutes}m`;
+    return `Invito: scade tra ${minutes}m`;
+  }
 
   async function loadUsers() {
     setLoading(true);
@@ -35,7 +61,7 @@ export default function UsersListBox({ onNotice }: { onNotice: (n: Notice) => vo
   useEffect(() => {
     loadUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [refreshToken]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -50,7 +76,7 @@ export default function UsersListBox({ onNotice }: { onNotice: (n: Notice) => vo
   }, [users, query]);
 
   async function handleChangeRole(id: string, newRole: AppRole) {
-    if (updatingId || deletingId) return;
+    if (updatingId || deletingId || regeneratingId) return;
     setUpdatingId(id);
 
     try {
@@ -82,6 +108,41 @@ export default function UsersListBox({ onNotice }: { onNotice: (n: Notice) => vo
     }
   }
 
+  async function handleRegenerateInvite(u: UserAdmin, sendEmail: boolean) {
+    if (updatingId || deletingId || regeneratingId) return;
+
+    setRegeneratingId(u.id);
+    try {
+      const result = await apiRegenerateInvite({
+        userId: u.id,
+        expiresInHours: 48,
+        sendEmail,
+      });
+
+      setUsers((prev) =>
+        prev.map((item) =>
+          item.id === u.id
+            ? {
+                ...item,
+                approved: false,
+                pendingInviteExpiresAt: result.expiresAt,
+                pendingInviteExpired: false,
+              }
+            : item,
+        ),
+      );
+
+      onNotice({
+        type: "success",
+        text: sendEmail ? "Invito rigenerato e inviato." : "Invito rigenerato.",
+      });
+    } catch (e: any) {
+      onNotice({ type: "error", text: e?.message || "Errore rigenerazione invito" });
+    } finally {
+      setRegeneratingId(null);
+    }
+  }
+
   const columns: Column<UserAdmin>[] = [
     {
       id: "main",
@@ -95,6 +156,18 @@ export default function UsersListBox({ onNotice }: { onNotice: (n: Notice) => vo
           <div className="mt-1 text-[11px] text-dark/60 dark:text-white/60">
             ID: <span className="break-all font-mono text-[10px]">{u.id}</span>
           </div>
+          {u.approved === false ? (
+            <div
+              className={clsx(
+                "mt-1 text-[11px]",
+                u.pendingInviteExpired
+                  ? "text-rose-600 dark:text-rose-300"
+                  : "text-amber-700 dark:text-amber-300",
+              )}
+            >
+              {formatInviteCountdown(u)}
+            </div>
+          ) : null}
         </div>
       ),
     },
@@ -107,7 +180,12 @@ export default function UsersListBox({ onNotice }: { onNotice: (n: Notice) => vo
           <RoleSelect
             value={u.role}
             onChange={(r) => handleChangeRole(u.id, r)}
-            disabled={u.role === "Super" || updatingId === u.id || deletingId === u.id}
+            disabled={
+              u.role === "Super" ||
+              updatingId === u.id ||
+              deletingId === u.id ||
+              regeneratingId === u.id
+            }
             size="sm"
           />
         </div>
@@ -153,13 +231,36 @@ export default function UsersListBox({ onNotice }: { onNotice: (n: Notice) => vo
         </button>
       }
       renderActions={(u) => {
-        const isBusyRow = updatingId === u.id || deletingId === u.id;
+        const isBusyRow = updatingId === u.id || deletingId === u.id || regeneratingId === u.id;
         const isSuper = u.role === "Super";
 
         return (
           <div className="flex flex-wrap justify-end gap-2">
             <UserAnagraficaManager user={u} onNotice={onNotice} />
+            <UserAulaManager user={u} onNotice={onNotice} />
             <UserBarcodeActionManager user={u} onNotice={onNotice} />
+
+            {u.approved === false ? (
+              <>
+                <button
+                  type="button"
+                  disabled={isBusyRow}
+                  onClick={() => handleRegenerateInvite(u, false)}
+                  className="rounded-md border border-amber-300 px-3 py-1.5 text-xs font-medium text-amber-800 transition-opacity hover:bg-amber-50 disabled:opacity-40 dark:border-amber-700/70 dark:text-amber-200 dark:hover:bg-amber-900/20"
+                >
+                  {regeneratingId === u.id ? "..." : "Rigenera invito"}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isBusyRow}
+                  onClick={() => handleRegenerateInvite(u, true)}
+                  className="rounded-md border border-primary/40 px-3 py-1.5 text-xs font-medium text-primary transition-opacity hover:bg-primary/5 disabled:opacity-40 dark:border-blue-400/40 dark:text-blue-200 dark:hover:bg-blue-400/10"
+                >
+                  {regeneratingId === u.id ? "..." : "Rigenera e invia"}
+                </button>
+              </>
+            ) : null}
 
             <button
               type="button"

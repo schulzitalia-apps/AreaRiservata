@@ -3,12 +3,13 @@ export function euro(n: number) {
   return new Intl.NumberFormat("it-IT", {
     style: "currency",
     currency: "EUR",
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(v);
 }
 
 export function signedEuro(n: number) {
-  const v = Math.round(Number(n) || 0);
+  const v = Number(n) || 0;
   const sign = v > 0 ? "+ " : v < 0 ? "- " : "";
   return sign + euro(Math.abs(v));
 }

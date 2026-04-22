@@ -1,7 +1,7 @@
 // src/components/AtlasModuli/common/useReferenceBatchPreview.ts
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useAppDispatch, useAppSelector } from "@/components/Store/hooks";
 import { fetchReferenceFieldValues } from "@/components/Store/slices/anagraficheSlice";
 import type { ReferenceConfig } from "@/config/anagrafiche.fields.catalog";
@@ -15,6 +15,7 @@ export type ReferenceBatchEntry = {
 export function useReferenceBatchPreviewMulti(entries: ReferenceBatchEntry[]) {
   const dispatch = useAppDispatch();
   const state = useAppSelector((s) => s.anagrafiche);
+  const requestedRef = useRef(new Set<string>());
 
   // normalizza + unique
   const normalized = useMemo(
@@ -39,6 +40,10 @@ export function useReferenceBatchPreviewMulti(entries: ReferenceBatchEntry[]) {
       const missing = ids.filter((id) => !(id in cacheForField));
       if (missing.length === 0) return;
 
+       const requestKey = `${targetSlug}::${fieldKey}::${[...missing].sort().join(",")}`;
+       if (requestedRef.current.has(requestKey)) return;
+       requestedRef.current.add(requestKey);
+
       dispatch(
         fetchReferenceFieldValues({
           type: targetSlug,   // bucket di destinazione
@@ -47,9 +52,11 @@ export function useReferenceBatchPreviewMulti(entries: ReferenceBatchEntry[]) {
           previewField,
           ids: missing,
         }),
-      );
+      ).finally(() => {
+        requestedRef.current.delete(requestKey);
+      });
     });
-  }, [normalized, dispatch]); // niente `state` per evitare loop
+  }, [normalized, dispatch, state.byType]);
 
   // build output: fieldKey -> (id -> label)
   const out: Record<string, Record<string, string | null>> = {};

@@ -78,15 +78,15 @@ export function ReferencePill({
       href={href}
       onClick={handleClick}
       className="
-        inline-flex items-center gap-1
+        inline-flex max-w-full items-center gap-1
         rounded-full border px-2 py-1 text-xs
         border-primary text-primary hover:bg-primary/10
         dark:text-red-400 dark:border-red-400 dark:hover:bg-red-400/10
         transition-colors
       "
     >
-      <span className="font-semibold">{fieldLabel}:</span>
-      <span className="truncate max-w-[180px]">{text}</span>
+      <span className="max-w-[120px] truncate font-semibold sm:max-w-[160px]">{fieldLabel}:</span>
+      <span className="min-w-0 max-w-[140px] truncate sm:max-w-[220px]">{text}</span>
       <ArrowUpRight className="h-3 w-3" />
     </a>
   );

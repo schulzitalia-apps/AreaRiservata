@@ -384,12 +384,12 @@ export default function EventoEdit({ id, type }: Props) {
 
   const initialBase = {
     data: current?.data ?? {},
-    visibilityRole: current?.visibilityRole ?? null,
+    visibilityRoles: current?.visibilityRole ? [current.visibilityRole] : [],
   };
 
   const handleSubmitBase = async (base: {
     data: Record<string, any>;
-    visibilityRole: string | null;
+    visibilityRoles: string[];
   }) => {
     setSaving(true);
     try {
@@ -437,7 +437,8 @@ export default function EventoEdit({ id, type }: Props) {
               gruppoId: gruppo.gruppoId,
             }
             : null,
-        visibilityRole: base.visibilityRole || null,
+        // La pipeline eventi è ancora single-role: persistiamo il primo valore selezionato.
+        visibilityRole: base.visibilityRoles[0] ?? null,
       };
 
       let eventoId = id;
@@ -744,7 +745,6 @@ export default function EventoEdit({ id, type }: Props) {
       <EditAttachmentsPanel
         documentTypes={((eventoDef as any).documentTypes as string[]) ?? ["altro"]}
         attachments={attachments}
-        canUpload={!!current?.id}
         onUpload={async ({ file, attachmentType, title }) => {
           if (!current?.id) return;
           const fd = new FormData();

@@ -193,6 +193,17 @@ export async function GET(
   const fieldsRaw = searchParams.getAll("fields");
   const fields = parseFieldsInput(fieldsRaw.length ? fieldsRaw : (searchParams.get("fields") as any)) as FieldKey[] | undefined;
 
+  // filtro opzionale per ids espliciti
+  const idsRaw = searchParams.getAll("ids");
+  const ids = Array.from(
+    new Set(
+      idsRaw
+        .flatMap((value) => String(value).split(","))
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ),
+  );
+
   // 6) Call service (pipeline nuova)
   const { items, total } = await listAnagrafiche({
     type,
@@ -203,6 +214,7 @@ export async function GET(
     visibilityRole,
     sort,
     fields,
+    ids: ids.length ? ids : undefined,
     auth,
   });
 

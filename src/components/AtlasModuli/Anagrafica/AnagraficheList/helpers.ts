@@ -236,6 +236,72 @@ export function formatFieldValue(fieldDef: FieldDef | undefined, raw: unknown): 
       return formatDateOnly(raw);
     case "select":
       return formatSelect(fieldDef, raw);
+    case "boolean":
+      return raw === true || String(raw).trim().toLowerCase() === "true" ? "Sì" : "No";
+    case "multiselect":
+      if (!Array.isArray(raw)) return "";
+      return raw
+        .map((value) => formatSelect(fieldDef, value))
+        .filter(Boolean)
+        .join(", ");
+    case "labelArray":
+    case "referenceMulti":
+      if (!Array.isArray(raw)) return "";
+      return raw
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean)
+        .join(", ");
+    case "numberArray":
+      if (!Array.isArray(raw)) return "";
+      return raw.map((value) => formatNumber(value)).filter(Boolean).join(", ");
+    case "rangeNumber":
+      if (!raw || typeof raw !== "object") return "";
+      return `${formatNumber((raw as any).from)} - ${formatNumber((raw as any).to)}`;
+    case "rangeDate":
+      if (!raw || typeof raw !== "object") return "";
+      return `${formatDateOnly((raw as any).start)} - ${formatDateOnly((raw as any).end)}`;
+    case "geoPoint":
+      if (!raw || typeof raw !== "object") return "";
+      return `${formatNumber((raw as any).lat)}, ${formatNumber((raw as any).lng)}`;
+    case "geoPointArray":
+      if (!Array.isArray(raw)) return "";
+      return raw
+        .map((item) => `${formatNumber((item as any)?.lat)}, ${formatNumber((item as any)?.lng)}`)
+        .join(" | ");
+    case "pairNumber":
+      if (!raw || typeof raw !== "object") return "";
+      return `${formatNumber((raw as any).a)} × ${formatNumber((raw as any).b)}`;
+    case "labelValuePairs":
+      if (!Array.isArray(raw)) return "";
+      return raw
+        .map((item) => {
+          const label = String((item as any)?.label ?? "").trim();
+          const value = String((item as any)?.value ?? "").trim();
+          return label && value ? `${label}: ${value}` : "";
+        })
+        .filter(Boolean)
+        .join(" | ");
+    case "keyValueNumber":
+      if (!Array.isArray(raw)) return "";
+      return raw
+        .map((item) => {
+          const key = String((item as any)?.key ?? "").trim();
+          const value = formatNumber((item as any)?.value);
+          return key && value ? `${key}: ${value}` : "";
+        })
+        .filter(Boolean)
+        .join(" | ");
+    case "address":
+      if (!raw || typeof raw !== "object") return "";
+      return [
+        String((raw as any).street ?? "").trim(),
+        String((raw as any).extra ?? "").trim(),
+        [String((raw as any).zip ?? "").trim(), String((raw as any).city ?? "").trim()].filter(Boolean).join(" "),
+        String((raw as any).province ?? "").trim(),
+        String((raw as any).country ?? "").trim(),
+      ]
+        .filter(Boolean)
+        .join(", ");
     default:
       return String(raw);
   }

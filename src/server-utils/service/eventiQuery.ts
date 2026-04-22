@@ -27,10 +27,15 @@ export type EventoPreview = {
   timeKind: TimeKind;
   startAt?: string | null;
   endAt?: string | null;
+  allDay?: boolean;
   updatedAt: string;
   visibilityRole?: string | null;
   ownerId?: string | null;
   ownerName?: string | null;
+  data?: Record<string, any>;
+  partecipanti?: EventoPartecipanteView[];
+  gruppo?: EventoGruppoView | null;
+  _autoEvent?: string | null;
 };
 
 export type DocumentLight = {
@@ -115,6 +120,10 @@ export type ListEventiParams = {
 
   page?: number;
   pageSize?: number;
+  includeData?: boolean;
+  includePartecipanti?: boolean;
+  includeGruppo?: boolean;
+  includeAllDay?: boolean;
 
   auth: AuthContext;
 };
@@ -130,6 +139,10 @@ export async function listEventi({
                                    gruppoFilter,
                                    page,
                                    pageSize,
+                                   includeData,
+                                   includePartecipanti,
+                                   includeGruppo,
+                                   includeAllDay,
                                    auth,
                                  }: ListEventiParams): Promise<{
   items: EventoPreview[];
@@ -274,19 +287,32 @@ export async function listEventi({
   const safePageSize = Math.min(pageSize ?? limit ?? 100, 200);
   const safePage = page && page > 0 ? page : 1;
   const skip = (safePage - 1) * safePageSize;
+  const projection: Record<string, 1> = {
+    data: 1,
+    owner: 1,
+    updatedAt: 1,
+    visibilityRole: 1,
+    timeKind: 1,
+    startAt: 1,
+    endAt: 1,
+    _autoEvent: 1,
+  };
+
+  if (includeAllDay) {
+    projection.allDay = 1;
+  }
+
+  if (includePartecipanti) {
+    projection.partecipanti = 1;
+  }
+
+  if (includeGruppo) {
+    projection.gruppo = 1;
+  }
 
   const [docsOut, total] = await Promise.all([
     Model.find(filter)
-      .select({
-        data: 1,
-        owner: 1,
-        updatedAt: 1,
-        visibilityRole: 1,
-        timeKind: 1,
-        startAt: 1,
-        endAt: 1,
-        _autoEvent: 1,
-      })
+      .select(projection)
       .sort({ startAt: 1, updatedAt: -1 })
       .skip(skip)
       .limit(safePageSize)
@@ -340,10 +366,30 @@ export async function listEventi({
       timeKind: m.timeKind,
       startAt: m.startAt ? new Date(m.startAt).toISOString() : null,
       endAt: m.endAt ? new Date(m.endAt).toISOString() : null,
+      allDay: includeAllDay ? !!m.allDay : undefined,
       updatedAt: new Date(m.updatedAt).toISOString(),
       visibilityRole: m.visibilityRole || null,
       ownerId: ownerIdStr,
       ownerName: ownerInfo?.name || null,
+      data: includeData ? (m.data || {}) : undefined,
+      partecipanti: includePartecipanti
+        ? (m.partecipanti ?? []).map((p: any) => ({
+            anagraficaType: p.anagraficaType,
+            anagraficaId: String(p.anagraficaId),
+            role: p.role ?? null,
+            status: p.status ?? null,
+            quantity: typeof p.quantity === "number" ? p.quantity : null,
+            note: p.note ?? null,
+          }))
+        : undefined,
+      gruppo:
+        includeGruppo && m.gruppo
+          ? {
+              gruppoType: m.gruppo.gruppoType,
+              gruppoId: String(m.gruppo.gruppoId),
+            }
+          : null,
+      _autoEvent: m._autoEvent ?? null,
     };
   });
 

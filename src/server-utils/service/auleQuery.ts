@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { connectToDatabase } from "../lib/mongoose-connection";
 import { getAulaModel } from "../models/aule.factory";
 import { getAulaDef } from "@/config/aule.registry";
+import { ANAGRAFICHE_REGISTRY, type AnagraficaDef } from "@/config/anagrafiche.registry";
 
 // Security ACL
 import { buildBasicAccessFilter } from "@/server-utils/access/access-engine";
@@ -420,4 +421,12 @@ export async function removeAttachmentFromAula(params: {
     documentId: String(att.documentId),
     type: att.type as string,
   };
+}
+
+/**
+ * Versione "untyped" di getAnagraficaDef per l'uso in contesti dinamici
+ * dove lo slug arriva come stringa generica.
+ */
+export function getAnagraficaDef_untyped(slug: string): AnagraficaDef | null {
+  return (ANAGRAFICHE_REGISTRY as any)[slug] || null;
 }

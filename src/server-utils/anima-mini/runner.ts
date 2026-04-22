@@ -73,11 +73,12 @@ export async function runNodes(args: {
       events.push({ type: "llm.request", ts: t0, nodeId: node.id, modelRef: node.modelRef });
 
       // 4) chiama LLM
-      const content = await llm.chat({
+      const result = await llm.chat({
         model: modelInfo.model,
         temperature: modelInfo.temperature ?? 0.2,
         messages,
       });
+      const content = result.content;
 
       // 5) emetti evento response (con latenza)
       const t1 = now();

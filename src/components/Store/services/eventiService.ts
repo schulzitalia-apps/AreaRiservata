@@ -5,7 +5,6 @@ import {
   EventoFull,
   DocumentLight,
 } from "../models/eventi";
-import { AnagraficaFull } from "@/components/Store/models/anagrafiche";
 
 export const eventiService = {
   list(params: {
@@ -20,6 +19,10 @@ export const eventiService = {
     gruppoId?: string;
     page?: number;
     pageSize?: number;
+    includeData?: boolean;
+    includePartecipanti?: boolean;
+    includeGruppo?: boolean;
+    includeAllDay?: boolean;
   }) {
     const {
       type,
@@ -33,6 +36,10 @@ export const eventiService = {
       gruppoId,
       page,
       pageSize,
+      includeData,
+      includePartecipanti,
+      includeGruppo,
+      includeAllDay,
     } = params;
 
     const qs = new URLSearchParams();
@@ -46,6 +53,10 @@ export const eventiService = {
     if (gruppoId) qs.set("gruppoId", gruppoId);
     if (page) qs.set("page", String(page));
     if (pageSize) qs.set("pageSize", String(pageSize));
+    if (includeData) qs.set("includeData", "1");
+    if (includePartecipanti) qs.set("includePartecipanti", "1");
+    if (includeGruppo) qs.set("includeGruppo", "1");
+    if (includeAllDay) qs.set("includeAllDay", "1");
 
     return apiClient.get<{
       items: EventoPreview[];
@@ -65,18 +76,18 @@ export const eventiService = {
 
   create(params: { type: string; payload: any }) {
     const { type, payload } = params;
-    return apiClient.post<{ id: string }>(
-      `/api/eventi/${type}`,
-      payload,
-    );
+
+    return apiClient
+      .post<{ evento: EventoFull }>(`/api/eventi/${type}`, payload)
+      .then((res) => res.evento);
   },
 
   update(params: { type: string; id: string; data: any }) {
     const { type, id, data } = params;
-    return apiClient.put<{ ok: true }>(
-      `/api/eventi/${type}/${id}`,
-      data,
-    );
+
+    return apiClient
+      .put<{ evento: EventoFull }>(`/api/eventi/${type}/${id}`, data)
+      .then((res) => res.evento);
   },
 
   remove(params: { type: string; id: string }) {

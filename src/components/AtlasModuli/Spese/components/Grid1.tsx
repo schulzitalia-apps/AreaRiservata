@@ -1,31 +1,22 @@
-"use client";
+﻿"use client";
 
 import { cn } from "@/server-utils/lib/utils";
 import { ApexDonutChart } from "@/components/Charts/ui/ApexDonutChart";
 import { RadialGauge } from "@/components/Charts/radial-gauge";
-
 import { Card, CardHeader, UpcomingTable } from "../ui";
 import { euro } from "../format";
-import { DONUT_COLORS } from "../mock";
+import { DONUT_COLORS } from "../config";
 
 type Props = {
   currentPeriodLabel: string;
-
-  // prev donut
   categoriesPrev: any;
-
-  // gauge
   gaugePercent: number;
   gaugeSubtitle: string;
   deltaIsUp: boolean;
-
-  // current donut
   categoriesCurrent: any;
   donutColors: string[];
-
-  // upcoming
   q: string;
-  setQ: (v: string) => void;
+  setQ: (value: string) => void;
   deferredQ: string;
   filteredUpcoming: any[];
   upcomingTotal: number;
@@ -34,7 +25,6 @@ type Props = {
 export function Grid1(props: Props) {
   return (
     <div className="grid gap-6 lg:grid-cols-12 lg:items-stretch">
-      {/* sinistra: prev + gauge */}
       <div className="lg:col-span-3">
         <Card className="h-full">
           <CardHeader title="Periodo precedente" subTitle={props.currentPeriodLabel} />
@@ -44,10 +34,10 @@ export function Grid1(props: Props) {
               height={250}
               data={props.categoriesPrev}
               title="Totale spese"
-              valueFormatter={(n) => euro(n)}
+              valueFormatter={(value) => euro(value)}
               colors={DONUT_COLORS}
               donutSize="76%"
-              showLegend={false}
+              showLegend
               glow
               className="-mx-2"
             />
@@ -56,9 +46,7 @@ export function Grid1(props: Props) {
           <div className="mx-5 my-1 h-px bg-stroke dark:bg-dark-3" />
 
           <div className="px-4 pb-5 pt-3">
-            <div className="mb-2 text-sm font-extrabold text-dark dark:text-white">
-              Avanzamento spese
-            </div>
+            <div className="mb-2 text-sm font-extrabold text-dark dark:text-white">Avanzamento spese</div>
 
             <RadialGauge<"periodo">
               showHeader={false}
@@ -86,18 +74,13 @@ export function Grid1(props: Props) {
         </Card>
       </div>
 
-      {/* centro: donut current */}
       <div className="lg:col-span-6">
         <Card className="h-full">
           <div className="px-5 pt-5">
-            <div className="text-xs font-semibold text-gray-500 dark:text-dark-6">
-              Distribuzione spese
-            </div>
+            <div className="text-xs font-semibold text-gray-500 dark:text-dark-6">Distribuzione spese</div>
             <div className="mt-1 text-lg font-extrabold text-dark dark:text-white">
               Periodo corrente{" "}
-              <span className="ml-2 text-sm font-semibold text-gray-500 dark:text-dark-6">
-                ({props.currentPeriodLabel})
-              </span>
+              <span className="ml-2 text-sm font-semibold text-gray-500 dark:text-dark-6">({props.currentPeriodLabel})</span>
             </div>
           </div>
 
@@ -106,10 +89,10 @@ export function Grid1(props: Props) {
               height={560}
               data={props.categoriesCurrent}
               title="Totale spese"
-              valueFormatter={(n) => euro(n)}
+              valueFormatter={(value) => euro(value)}
               colors={props.donutColors as any}
               donutSize="86%"
-              showLegend={false}
+              showLegend
               glow
               className="-mx-3 sm:-mx-5"
             />
@@ -117,26 +100,19 @@ export function Grid1(props: Props) {
         </Card>
       </div>
 
-      {/* destra: upcoming */}
       <div className="lg:col-span-3">
         <Card className="h-full">
           <CardHeader
             title="Prossime spese"
-            right={
-              <span className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-extrabold text-primary">
-                Tot: {euro(props.upcomingTotal)}
-              </span>
-            }
+            right={<span className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-extrabold text-primary">Tot: {euro(props.upcomingTotal)}</span>}
           />
           <div className="px-4 pb-4">
             <div className="mb-3">
-              <label className="text-xs font-semibold text-gray-500 dark:text-dark-6">
-                Cerca
-              </label>
+              <label className="text-xs font-semibold text-gray-500 dark:text-dark-6">Cerca</label>
               <input
                 value={props.q}
-                onChange={(e) => props.setQ(e.target.value)}
-                placeholder="Es. F24, stipendi, energia…"
+                onChange={(event) => props.setQ(event.target.value)}
+                placeholder="Es. F24, stipendi, energia..."
                 className={cn(
                   "mt-1 w-full rounded-lg border border-stroke bg-white px-3 py-2 text-sm font-semibold text-dark outline-none",
                   "focus:border-primary/40",
@@ -151,7 +127,7 @@ export function Grid1(props: Props) {
 
             {!props.filteredUpcoming.length ? (
               <div className="mt-3 rounded-lg border border-dashed border-stroke p-3 text-center text-sm font-semibold text-gray-600 dark:border-dark-3 dark:text-dark-6">
-                Nessun risultato per “{props.deferredQ}”.
+                Nessun risultato per &quot;{props.deferredQ}&quot;.
               </div>
             ) : null}
           </div>
@@ -160,3 +136,4 @@ export function Grid1(props: Props) {
     </div>
   );
 }
+

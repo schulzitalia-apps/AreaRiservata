@@ -1,6 +1,4 @@
-// src/components/AtlasModuli/Spese/types.ts
-
-export type TimeKey = "mese" | "trimestre" | "semestre" | "anno" | "anno_fiscale";
+﻿export type TimeKey = "mese" | "trimestre" | "semestre" | "anno" | "anno_fiscale";
 
 export type UpcomingExpense = {
   title: string;
@@ -17,7 +15,7 @@ export type PctSet = {
   consulenze: number;
 };
 
-export type CategoryKey = "all" | keyof PctSet;
+export type CategoryKey = "all" | string;
 
 export type Txn = {
   id: string;
@@ -25,12 +23,12 @@ export type Txn = {
   supplier: string;
   dateLabel: string;
   amount: number;
-  category: keyof PctSet;
+  category: string;
 };
 
 export type Memo = {
   id: string;
   title: string;
-  date: string; // YYYY-MM-DD
+  date: string;
   amount: number;
 };

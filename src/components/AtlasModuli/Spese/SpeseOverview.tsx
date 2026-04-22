@@ -1,30 +1,28 @@
-"use client";
+﻿"use client";
 
-import { useDeferredValue, useState, useTransition } from "react";
+import { useDeferredValue, useMemo, useState, useTransition } from "react";
+import { useAnagraficaVariants } from "@/components/AtlasModuli/Anagrafica/variants/useAnagraficaVariants";
+import { useReferenceBatchPreviewMulti } from "@/components/AtlasModuli/common/useReferenceBatchPreview";
+import { isReferenceField } from "@/config/anagrafiche.fields.catalog";
+import { getAnagraficaDef } from "@/config/anagrafiche.registry";
 
-// Local types
 import type { TimeKey } from "./types";
 import type { CatKey } from "./speseOverview.category";
 
-// Mock/constants
-import { TIME_OPTIONS } from "./mock";
-
-// Helpers
+import { TIME_OPTIONS } from "./config";
 import { euro, formatPct } from "./format";
 import { colorForKey } from "./speseOverview.safe";
-
-// UI atoms (NON TOCCARE)
 import { KpiTile, DeltaPill, IconWallet, IconReceipt, IconTrend, IconPie } from "./ui";
-
-// Hooks
 import { useSpeseAnalyticsSource } from "./hooks/useSpeseAnalyticsSource";
 import { useSpeseMemos } from "./hooks/useSpeseMemos";
 import { useSpeseOverviewComputed } from "./hooks/useSpeseOverviewComputed";
-
-// Components (NEW)
 import { Header } from "./components/Header";
 import { Grid1 } from "./components/Grid1";
 import { Grid2 } from "./components/Grid2";
+
+const speseDef = getAnagraficaDef("spese");
+const supplierField = speseDef.fields.fornitore;
+const supplierReferenceConfig = isReferenceField(supplierField) ? supplierField.reference : null;
 
 export default function SpeseOverview() {
   const [timeKey, setTimeKey] = useState<TimeKey>("anno");
@@ -33,41 +31,66 @@ export default function SpeseOverview() {
   const deferredQ = useDeferredValue(q);
   const [isPending, startTransition] = useTransition();
 
-  // Data source (mock/API + fetch)
-  const { useMock, setUseMock, apiData, apiStatus, apiError } =
-    useSpeseAnalyticsSource(timeKey);
+  const { apiData, apiStatus, apiError } = useSpeseAnalyticsSource(timeKey);
+  const { options: variantOptions } = useAnagraficaVariants("spese", true);
 
-  // Computed data (derivati)
+  const variantLabelById = useMemo(
+    () => Object.fromEntries(variantOptions.map((variant: { variantId: string; label: string }) => [String(variant.variantId), variant.label])) as Record<string, string>,
+    [variantOptions],
+  );
+
   const computed = useSpeseOverviewComputed({
-    useMock,
     apiData,
     timeKey,
     catKey,
     setCatKey,
     q,
     deferredQ,
+    variantLabelById,
   });
 
-  // Memo state
-  const memo = useSpeseMemos(timeKey);
+  const supplierIds = useMemo(() => {
+    if (!supplierReferenceConfig) return [];
+    return computed.top10
+      .map((row: any) => String(row.supplier ?? ""))
+      .filter((id) => /^[a-f0-9]{24}$/i.test(id));
+  }, [computed.top10]);
 
-  const catColor =
-    computed.categoryMetaLike[String(catKey)]?.color ?? colorForKey(String(catKey));
+  const supplierPreviewMap = useReferenceBatchPreviewMulti(
+    supplierReferenceConfig
+      ? [
+          {
+            fieldKey: "fornitore",
+            config: supplierReferenceConfig,
+            ids: supplierIds,
+          },
+        ]
+      : [],
+  );
+
+  const top10 = useMemo(() => {
+    const labels = supplierPreviewMap.fornitore ?? {};
+    return computed.top10.map((row: any) => ({
+      ...row,
+      supplier: labels[String(row.supplier)] ?? row.supplier ?? "—",
+    }));
+  }, [computed.top10, supplierPreviewMap]);
+
+  const memo = useSpeseMemos(timeKey);
+  const catColor = computed.categoryMetaLike[String(catKey)]?.color ?? colorForKey(String(catKey));
 
   return (
     <>
       <Header
         currentPeriodLabel={computed.currentPeriodLabel}
         timeKey={timeKey}
-        setTimeKey={(v) =>
+        setTimeKey={(value) =>
           startTransition(() => {
-            setTimeKey(v);
+            setTimeKey(value);
           })
         }
         setCatKeyAll={() => setCatKey("all")}
         isPending={isPending}
-        useMock={useMock}
-        toggleUseMock={() => setUseMock((v) => !v)}
         apiStatus={apiStatus}
         apiError={apiError}
         TIME_OPTIONS={TIME_OPTIONS as any}
@@ -89,7 +112,6 @@ export default function SpeseOverview() {
         upcomingTotal={computed.upcomingTotal}
       />
 
-      {/* KPI FULL WIDTH */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiTile
           title="Totale spese"
@@ -114,16 +136,13 @@ export default function SpeseOverview() {
         <KpiTile
           title="Driver principale"
           value={computed.topCurrent?.label ?? "—"}
-          sub={`${formatPct(
-            ((computed.topCurrent?.value ?? 0) / Math.max(1, computed.currentLordo)) * 100,
-            0,
-          )} · ${euro(computed.topCurrent?.value ?? 0)}`}
+          sub={`${formatPct(((computed.topCurrent?.value ?? 0) / Math.max(1, computed.currentLordo)) * 100, 0)} · ${euro(computed.topCurrent?.value ?? 0)}`}
           icon={<IconPie />}
         />
       </div>
 
       <Grid2
-        top10={computed.top10}
+        top10={top10}
         catLabel={computed.catLabel}
         currentPeriodLabel={computed.currentPeriodLabel}
         catKey={catKey}
@@ -146,3 +165,5 @@ export default function SpeseOverview() {
     </>
   );
 }
+
+

@@ -13,15 +13,15 @@ export const ANAGRAFICHE_LIST_UI_BY_SLUG: Partial<
     variant: "comfortable",
     main: {
       title: fk("ragioneSociale"),
-      subtitle: fk("variantId", "referenteAmministrazione"),
+      subtitle: fk("tipoCliente"),
       showOwner: true,
       showDate: "updatedOrCreated",
       referencePills: false,
     },
     columns: {
-      mode: "custom",
+      mode: "searchIn",
       // extra colonne oltre al searchIn:
-      keys: fk("email", "citta", "nomeAgente", "sedeLegale"),
+      keys: fk("email", "telefonoMobile"),
       showVisibility: true,
     },
     controls: {
@@ -32,25 +32,24 @@ export const ANAGRAFICHE_LIST_UI_BY_SLUG: Partial<
     hoverPreview: false,
   },
 
-  "conferme-ordine": {
+  spese: {
     variant: "comfortable",
     main: {
-      title: fk("riferimento"),
-      subtitle: fk(),
+      title: fk("tipoSpesa", "servizioAbbonamento"),
+      subtitle: fk("descrizione"),
       showOwner: false,
       showDate: "updatedOrCreated",
-      referencePills: fk("codiceCliente"),
+      referencePills: fk("fornitore", "dipendente"),
     },
     columns: {
       mode: "custom",
       keys: fk(
-        "numeroOrdine",
-        "statoAvanzamento",
-        "inizioConsegna",
-        "fineConsegna",
-        "note",
+        "dataSpesa",
+        "variantId",
+        "fornitore",
+        "totaleLordo",
       ),
-      showVisibility: false,
+      showVisibility: true,
     },
     controls: {
       docType: true,
@@ -58,6 +57,42 @@ export const ANAGRAFICHE_LIST_UI_BY_SLUG: Partial<
       sort: false,
     },
     hoverPreview: false
+  },
+
+  "anagrafiche-test": {
+    variant: "comfortable",
+    main: {
+      title: fk("titoloTestAnagrafica"),
+      subtitle: fk("flagAttivoTest"),
+      showOwner: true,
+      showDate: "updatedOrCreated",
+      referencePills: false,
+    },
+    columns: {
+      mode: "custom",
+      keys: fk(
+        "categorieTestMulti",
+        "etichetteLibereTest",
+        "clientiCollegatiTest",
+        "numeriTestArray",
+        "rangeNumeroTest",
+        "rangeDataTest",
+        "posizioneTestGeo",
+        "percorsoTestGeo",
+        "dimensioniTestPair",
+        "specificheTestPairs",
+        "metricheTestKeyValue",
+        "indirizzoTestStrutturato",
+        "noteTestAnagrafica",
+      ),
+      showVisibility: true,
+    },
+    controls: {
+      docType: true,
+      visibility: false,
+      sort: true,
+    },
+    hoverPreview: false,
   },
 };
 

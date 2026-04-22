@@ -8,6 +8,7 @@ import UsersListBox from "./sections/UsersListBox";
 
 export default function DevQuickUser() {
   const [notice, setNotice] = useState<Notice>(null);
+  const [usersRefreshToken, setUsersRefreshToken] = useState(0);
 
   useEffect(() => {
     if (!notice) return;
@@ -22,12 +23,11 @@ export default function DevQuickUser() {
       <InviteCreateBox
         onNotice={setNotice}
         onAfterInvite={() => {
-          // qui non faccio nulla: UsersListBox ha già pulsante Aggiorna
-          // se vuoi auto-refresh, possiamo passare una callback “invalidate users”
+          setUsersRefreshToken((prev) => prev + 1);
         }}
       />
 
-      <UsersListBox onNotice={setNotice} />
+      <UsersListBox onNotice={setNotice} refreshToken={usersRefreshToken} />
     </div>
   );
 }

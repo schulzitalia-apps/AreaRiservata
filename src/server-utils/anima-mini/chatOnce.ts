@@ -1,20 +1,27 @@
 import { createMongoStore } from "./memoryStore";
-import { createGroqProvider } from "./groqClient";
 import { buildBasicNodes, parseSummaryFromModelOutput } from "./nodes";
 import { runNodes } from "./runner";
+import {
+  createRuntimeChatProvider,
+  resolveRuntimeChatSelection,
+} from "@/server-utils/llm";
 
 const memory = createMongoStore();
-
-const models = {
-  fast: { provider: "groq" as const, model: "llama-3.1-8b-instant", temperature: 0.2 },
-};
 
 export async function chatOnce(args: {
   userId: string;
   userMessage: string;
-  groqApiKey: string;
   language?: "it" | "en";
 }) {
+  const selection = resolveRuntimeChatSelection();
+  const models = {
+    fast: {
+      provider: selection.provider,
+      model: selection.model,
+      temperature: 0.2,
+    },
+  };
+
   const prevSummary = await memory.loadSummary(args.userId);
 
   const ctx = {
@@ -27,7 +34,7 @@ export async function chatOnce(args: {
     outputs: {},
   };
 
-  const llm = createGroqProvider(args.groqApiKey);
+  const llm = createRuntimeChatProvider(selection.provider);
   const { assistantNode, summarizeNode } = buildBasicNodes();
 
   const { ctx: outCtx, events } = await runNodes({

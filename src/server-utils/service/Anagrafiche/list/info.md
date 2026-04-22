@@ -31,7 +31,8 @@ listAnagrafiche(params: {
   docType?: string;
   visibilityRole?: string;
   sort?: ListSortKey;
-  fields?: FieldKey[];      
+  fields?: FieldKey[];
+  ids?: string[];
   auth: AuthContext;
 }): Promise<{ items: AnagraficaPreview[]; total: number }>
 ```
@@ -45,6 +46,14 @@ listAnagrafiche(params: {
 * se passi `fields`, la list ritorna in `data` **solo** i campi `data.<field>` richiesti, **purché** appartengano ai campi definiti per quel tipo (cioè alla definizione del tipo in registry: `def.fields`).
 
 > Nota: `fields` influenza **solo i campi restituiti** (projection). Non cambia ACL, filtri, o logica di listing.
+
+**Comportamento con filtro batch `ids` (NEW):**
+
+* se passi `ids`, la list restringe il result set a `_id in ids[]`
+* `ids` viene applicato dentro la stessa pipeline della list, quindi mantiene ACL, projection, sort, count e mapping
+* se `ids` contiene solo valori non validi, la service ritorna subito `{ items: [], total: 0 }`
+
+> Nota: `ids` non e' un bypass ACL. Un documento fuori ACL resta invisibile anche se il suo id e' presente nel filtro.
 
 ---
 
@@ -245,6 +254,7 @@ Di seguito: **ogni componente** della list, cosa fa, su quali campi del modello 
 * `visibilityRole?` (dominio)
 * `sort?` (whitelist)
 * `fields?` (✅ NEW: projection dinamica su data.*)
+* `ids?` (batch `_id in [...]`)
 * `limit/offset`
 * `auth` (ACL)
 
@@ -419,3 +429,29 @@ Sort supportati:
 * **Join**: fetch secondario di enrichment (owners)
 * **Mapper**: trasformazione doc → DTO
 * **ACL**: filtro di sicurezza centralizzato
+* **Batch ids filter**: `ids[]` â†’ subset esplicito di `_id` dentro la stessa pipeline della list
+
+---
+
+## 7) Addendum: filtro batch `ids[]`
+
+Il parametro `ids[]` permette di usare `listAnagrafiche` come query batch di dominio senza aprire una query separata ad hoc.
+
+Semantica:
+
+* supportato lato service e lato API collection
+* lato API puo' arrivare come CSV oppure come query param ripetuto
+* lato service viene trasformato in filtro `_id in ids[]`
+* resta sempre combinato con l'ACL row-level
+
+Effetti pratici:
+
+* mantiene projection dinamica, sort, count e mapping preview
+* evita cicli `getOne` quando gli id sono gia' noti da un'altra risorsa Atlas
+* se gli id passati non sono validi, la service ritorna subito `{ items: [], total: 0 }`
+
+Caso d'uso attuale:
+
+* `SprintTimeline` ricava gli id task dai partecipanti della `Aula sprint`
+* poi carica i task con `listAnagrafiche(type="task", ids=[...])`
+* in questo modo resta sul flusso documentato della list, ma in modalita' batch

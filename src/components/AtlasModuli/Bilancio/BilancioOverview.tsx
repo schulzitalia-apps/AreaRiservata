@@ -1,40 +1,26 @@
-"use client";
+﻿"use client";
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import type { BilancioTimeKey, BilancioTotals } from "./types";
 import { computeBilancioGauge } from "./bilancio.compute";
-import {
-  BILANCIO_MOVIMENTI_MOCK,
-  BILANCIO_TIME_OPTIONS,
-  BILANCIO_TILES_MOCK,
-  PERIOD_LABEL,
-} from "./mock";
+import { BILANCIO_TIME_OPTIONS, PERIOD_LABEL } from "./config";
 import { euro, signedEuro } from "./format";
 
 import { Header } from "./components/Header";
 import { Grid1 } from "./components/Grid1";
 import { Grid2 } from "./components/Grid2";
-
 import { KpiTile, IconWallet, IconReceipt, IconTrend, IconPie } from "./ui";
 
-// Hooks moduli (non tocchiamo)
 import { useSpeseAnalyticsSource } from "@/components/AtlasModuli/Spese/hooks/useSpeseAnalyticsSource";
 import { useSpeseOverviewComputed } from "@/components/AtlasModuli/Spese/hooks/useSpeseOverviewComputed";
-
 import { useRicaviAnalyticsSource } from "@/components/AtlasModuli/Ricavi/hooks/useRicaviAnalyticsSource";
 import { useRicaviOverviewComputed } from "@/components/AtlasModuli/Ricavi/hooks/useRicaviOverviewComputed";
-
 import { mapBilancioToModuleTimeKey, useBilancioTotals } from "./hooks/useBilancioTotals";
 
-// KPI/config
 import { DESTINAZIONE_CONFIG, UTILE_TAX_RATE } from "./bilancio.config";
 import { computeDestinazioneFromUtile, computeTaxFromUtile } from "./bilancio.kpi.compute";
-
-// Monthly chart
 import { buildMonthlyBarFromModules } from "./bilancio.monthly.live";
-
-// ✅ Fiscal year (da Gennaio)
 import { computeFiscalYearTotalsFromMonthly } from "./bilancio.fiscal";
 
 function mergeStatus(a?: string, b?: string) {
@@ -55,59 +41,131 @@ type Grid2Pack = {
   barColors: string[];
 };
 
+function splitCurrentMonths(months: any[], timeKey: BilancioTimeKey) {
+  const sorted = [...(Array.isArray(months) ? months : [])].sort((a: any, b: any) =>
+    String(a?.month ?? "").localeCompare(String(b?.month ?? "")),
+  );
+
+  if (!sorted.length) return [] as any[];
+
+  if (timeKey === "anno_fiscale") {
+    const lastMonth = String(sorted[sorted.length - 1]?.month ?? "");
+    const year = Number(lastMonth.slice(0, 4));
+    if (year) return sorted.filter((row: any) => String(row?.month ?? "").startsWith(`${year}-`));
+  }
+
+  return sorted.slice(Math.floor(sorted.length / 2));
+}
+
+function movementDateLabel(iso: string) {
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return "—";
+  return new Intl.DateTimeFormat("it-IT", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(parsed);
+}
+
+function movementTime(iso: string) {
+  const parsed = new Date(iso);
+  return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+}
+
+function buildLiveMovimenti(args: {
+  ricaviData?: any;
+  speseData?: any;
+  timeKey: BilancioTimeKey;
+}) {
+  const rows: Array<{ id: string; title: string; dateLabel: string; amount: number; sortKey: number }> = [];
+
+  const filterBucketToMonths = (bucket: any, months: Set<string>) => {
+    const out: Record<string, any[]> = {};
+    for (const variantId of Object.keys(bucket || {})) {
+      out[variantId] = (Array.isArray(bucket?.[variantId]) ? bucket[variantId] : []).filter((item: any) => {
+        const effectiveDate = String(
+          item?.effectiveDate ?? item?.dataPagamento ?? item?.dataFatturazione ?? item?.dataSpesa ?? "",
+        ).trim();
+        if (!effectiveDate) return true;
+        const date = new Date(effectiveDate);
+        if (Number.isNaN(date.getTime())) return true;
+        const monthKey = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+        return months.has(monthKey);
+      });
+    }
+    return out;
+  };
+
+  const pushBucket = (bucket: any, sign: 1 | -1, kind: "ricavo" | "spesa") => {
+    for (const variantId of Object.keys(bucket || {})) {
+      const items = Array.isArray(bucket?.[variantId]) ? bucket[variantId] : [];
+      for (const item of items) {
+        const title =
+          String(item?.titolo ?? item?.descrizione ?? item?.title ?? (kind === "ricavo" ? "Ricavo" : "Spesa")).trim() ||
+          (kind === "ricavo" ? "Ricavo" : "Spesa");
+        const effectiveDate = String(
+          item?.effectiveDate ?? item?.dataPagamento ?? item?.dataFatturazione ?? item?.dataSpesa ?? "",
+        ).trim();
+        const amount = Math.abs(Number(item?.lordo ?? item?.totaleLordo ?? item?.amount ?? 0) || 0);
+
+        rows.push({
+          id: String(item?.id ?? item?._id ?? `${kind}-${variantId}-${title}`),
+          title,
+          dateLabel: effectiveDate ? movementDateLabel(effectiveDate) : "—",
+          amount: sign * amount,
+          sortKey: movementTime(effectiveDate),
+        });
+      }
+    }
+  };
+
+  const ricaviMonths = new Set(
+    splitCurrentMonths(args.ricaviData?.months ?? [], args.timeKey).map((row: any) => String(row?.month ?? "")),
+  );
+  const speseMonths = new Set(
+    splitCurrentMonths(args.speseData?.months ?? [], args.timeKey).map((row: any) => String(row?.month ?? "")),
+  );
+
+  pushBucket(filterBucketToMonths(args.ricaviData?.top?.paidOrInvoicedRecent, ricaviMonths), 1, "ricavo");
+  pushBucket(filterBucketToMonths(args.ricaviData?.top?.programmatoRecent, ricaviMonths), 1, "ricavo");
+  pushBucket(filterBucketToMonths(args.speseData?.top?.paidOrInvoicedRecent, speseMonths), -1, "spesa");
+  pushBucket(filterBucketToMonths(args.speseData?.top?.programmatoRecent, speseMonths), -1, "spesa");
+
+  const deduped = new Map<string, { id: string; title: string; dateLabel: string; amount: number; sortKey: number }>();
+  for (const row of rows) {
+    if (!deduped.has(row.id)) deduped.set(row.id, row);
+  }
+
+  return Array.from(deduped.values())
+    .sort((a, b) => b.sortKey - a.sortKey || Math.abs(b.amount) - Math.abs(a.amount))
+    .slice(0, 12)
+    .map(({ sortKey, ...row }) => row);
+}
+
+function average(values: number[]) {
+  if (!values.length) return 0;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
 export default function BilancioOverview() {
-  // ✅ default preferito: anno fiscale
   const [timeKey, setTimeKey] = useState<BilancioTimeKey>("anno_fiscale");
-
-  // Switch unico bilancio (mock/API)
-  const [useMock, setUseMock] = useState(false);
-
-  // movimenti search (mock per ora)
   const [q, setQ] = useState("");
   const deferredQ = useDeferredValue(q);
-
   const [isPending, startTransition] = useTransition();
 
-  /**
-   * Per i grafici “filtrati” usiamo il mapping:
-   * - anno_fiscale -> anno (per avere monthly 12 mesi disponibili dai moduli)
-   * - tutto -> anno (per ora)
-   */
   const moduleTimeKey = mapBilancioToModuleTimeKey(timeKey);
 
-  /**
-   * 🔹 SOURCES per filtro UI
-   */
   const speseSource = useSpeseAnalyticsSource(moduleTimeKey as any);
   const ricaviSource = useRicaviAnalyticsSource(moduleTimeKey as any);
-
-  /**
-   * 🔹 SOURCES “ANNO” (sempre) per KPI FISSI (YTD fiscale)
-   */
   const speseYearSource = useSpeseAnalyticsSource("anno" as any);
   const ricaviYearSource = useRicaviAnalyticsSource("anno" as any);
 
-  // ✅ quando switcho Bilancio, imposto useMock su tutti i source
-  useEffect(() => {
-    speseSource.setUseMock(useMock);
-    ricaviSource.setUseMock(useMock);
-    speseYearSource.setUseMock(useMock);
-    ricaviYearSource.setUseMock(useMock);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [useMock]);
-
-  // catKey state (non la usiamo veramente)
   const [speseCatKey, setSpeseCatKey] = useState<any>("all");
   const [ricaviCatKey, setRicaviCatKey] = useState<any>("all");
-
   const [speseYearCatKey, setSpeseYearCatKey] = useState<any>("all");
   const [ricaviYearCatKey, setRicaviYearCatKey] = useState<any>("all");
 
-  /**
-   * 🔹 COMPUTED per filtro UI
-   */
   const speseComputed = useSpeseOverviewComputed({
-    useMock: speseSource.useMock,
     apiData: speseSource.apiData,
     timeKey: moduleTimeKey as any,
     catKey: speseCatKey,
@@ -115,9 +173,7 @@ export default function BilancioOverview() {
     q: "",
     deferredQ: "",
   });
-
   const ricaviComputed = useRicaviOverviewComputed({
-    useMock: ricaviSource.useMock,
     apiData: ricaviSource.apiData,
     timeKey: moduleTimeKey as any,
     catKey: ricaviCatKey,
@@ -125,12 +181,7 @@ export default function BilancioOverview() {
     q: "",
     deferredQ: "",
   });
-
-  /**
-   * 🔹 COMPUTED “ANNO” (sempre) per KPI FISSI
-   */
   const speseYearComputed = useSpeseOverviewComputed({
-    useMock: speseYearSource.useMock,
     apiData: speseYearSource.apiData,
     timeKey: "anno" as any,
     catKey: speseYearCatKey,
@@ -138,9 +189,7 @@ export default function BilancioOverview() {
     q: "",
     deferredQ: "",
   });
-
   const ricaviYearComputed = useRicaviOverviewComputed({
-    useMock: ricaviYearSource.useMock,
     apiData: ricaviYearSource.apiData,
     timeKey: "anno" as any,
     catKey: ricaviYearCatKey,
@@ -149,133 +198,77 @@ export default function BilancioOverview() {
     deferredQ: "",
   });
 
-  /**
-   * Totals bilancio per filtro UI (serve al gauge nei filtri NON fiscali)
-   */
+  const ricaviYearMonthly = useMemo(() => (ricaviYearComputed as any).monthly ?? [], [ricaviYearComputed]);
+  const speseYearMonthly = useMemo(() => (speseYearComputed as any).monthly ?? [], [speseYearComputed]);
+  const ricaviSelectedMonthly = useMemo(() => (ricaviComputed as any).monthly ?? [], [ricaviComputed]);
+  const speseSelectedMonthly = useMemo(() => (speseComputed as any).monthly ?? [], [speseComputed]);
+
   const totals = useBilancioTotals({
     bilancioTimeKey: timeKey,
-    bilancioUseMock: useMock,
-
-    ricaviSourceUseMock: ricaviSource.useMock,
-    speseSourceUseMock: speseSource.useMock,
     ricaviApiStatus: ricaviSource.apiStatus,
     speseApiStatus: speseSource.apiStatus,
-
     ricaviCurrentLordo: ricaviComputed.currentLordo,
     speseCurrentLordo: speseComputed.currentLordo,
   });
 
-  /**
-   * ✅ Totali fiscali (Gennaio → oggi) calcolati SEMPRE da monthly annuale
-   */
-  const fiscalTotals = useMemo(() => {
-    return computeFiscalYearTotalsFromMonthly({
-      ricaviMonthly: (ricaviYearComputed as any).monthly ?? [],
-      speseMonthly: (speseYearComputed as any).monthly ?? [],
-    });
-  }, [(ricaviYearComputed as any).monthly, (speseYearComputed as any).monthly]);
+  const fiscalTotals = useMemo(
+    () =>
+      computeFiscalYearTotalsFromMonthly({
+        ricaviMonthly: ricaviYearMonthly,
+        speseMonthly: speseYearMonthly,
+      }),
+    [ricaviYearMonthly, speseYearMonthly],
+  );
 
-  const utileFiscale = useMemo(() => {
-    return Math.round((fiscalTotals.ricavi || 0) - (fiscalTotals.spese || 0));
-  }, [fiscalTotals.ricavi, fiscalTotals.spese]);
+  const utileFiscale = useMemo(
+    () => Number(fiscalTotals.ricavi || 0) - Number(fiscalTotals.spese || 0),
+    [fiscalTotals.ricavi, fiscalTotals.spese],
+  );
 
-  /**
-   * ✅ FIX: tachimetro usa fiscalTotals se anno_fiscale
-   */
   const gaugeTotals: BilancioTotals = useMemo(() => {
     if (timeKey === "anno_fiscale") {
       return {
-        ricavi: Math.round(Number(fiscalTotals.ricavi) || 0),
-        spese: Math.round(Number(fiscalTotals.spese) || 0),
+        ricavi: Number(fiscalTotals.ricavi) || 0,
+        spese: Number(fiscalTotals.spese) || 0,
       };
     }
     return totals;
   }, [timeKey, fiscalTotals.ricavi, fiscalTotals.spese, totals]);
 
-  const gauge = useMemo(
-    () => computeBilancioGauge(gaugeTotals),
-    [gaugeTotals.ricavi, gaugeTotals.spese],
+  const gauge = useMemo(() => computeBilancioGauge(gaugeTotals), [gaugeTotals]);
+
+  const destinazione = useMemo(
+    () => computeDestinazioneFromUtile({ utileAnnuale: utileFiscale, config: DESTINAZIONE_CONFIG }),
+    [utileFiscale],
+  );
+  const tax = useMemo(
+    () => computeTaxFromUtile({ utileAnnuale: utileFiscale, rate: UTILE_TAX_RATE }),
+    [utileFiscale],
   );
 
-  /**
-   * ✅ Destinazione utile — SEMPRE su utile fiscale (clamped)
-   */
-  const destinazione = useMemo(() => {
-    return computeDestinazioneFromUtile({
-      utileAnnuale: utileFiscale,
-      config: DESTINAZIONE_CONFIG,
-    });
-  }, [utileFiscale]);
-
-  /**
-   * ✅ Tassa utile — SEMPRE su utile fiscale
-   */
-  const tax = useMemo(() => {
-    return computeTaxFromUtile({ utileAnnuale: utileFiscale, rate: UTILE_TAX_RATE });
-  }, [utileFiscale]);
-
-  /**
-   * insight line in header (coerente col gauge)
-   */
   const insightLine = useMemo(() => {
-    const p = gauge.profit;
-    if (p >= 0) {
-      return `Utile di ${signedEuro(p)} su ricavi ${euro(gauge.ricavi)} (${gauge.relativePctLabel}) nel periodo selezionato.`;
+    if (gauge.profit >= 0) {
+      return `Utile di ${signedEuro(gauge.profit)} su ricavi ${euro(gauge.ricavi)} (${gauge.relativePctLabel}) nel periodo selezionato.`;
     }
-    return `Perdita di ${signedEuro(p)} su spese ${euro(gauge.spese)} (${gauge.relativePctLabel}) nel periodo selezionato.`;
+    return `Perdita di ${signedEuro(gauge.profit)} su spese ${euro(gauge.spese)} (${gauge.relativePctLabel}) nel periodo selezionato.`;
   }, [gauge.profit, gauge.ricavi, gauge.spese, gauge.relativePctLabel]);
 
-  // api status aggregato (spese+ricavi + annuali)
-  const apiStatus = useMemo(() => {
-    if (useMock) return "idle";
-    return mergeStatus(
-      mergeStatus(speseSource.apiStatus as any, ricaviSource.apiStatus as any),
-      mergeStatus(speseYearSource.apiStatus as any, ricaviYearSource.apiStatus as any),
-    );
-  }, [
-    useMock,
-    speseSource.apiStatus,
-    ricaviSource.apiStatus,
-    speseYearSource.apiStatus,
-    ricaviYearSource.apiStatus,
-  ]);
+  const apiStatus = useMemo(
+    () =>
+      mergeStatus(
+        mergeStatus(speseSource.apiStatus as any, ricaviSource.apiStatus as any),
+        mergeStatus(speseYearSource.apiStatus as any, ricaviYearSource.apiStatus as any),
+      ),
+    [speseSource.apiStatus, ricaviSource.apiStatus, speseYearSource.apiStatus, ricaviYearSource.apiStatus],
+  );
+  const apiError = useMemo(
+    () => speseSource.apiError ?? ricaviSource.apiError ?? speseYearSource.apiError ?? ricaviYearSource.apiError ?? null,
+    [speseSource.apiError, ricaviSource.apiError, speseYearSource.apiError, ricaviYearSource.apiError],
+  );
 
-  const apiError = useMemo(() => {
-    if (useMock) return null;
-    return (
-      speseSource.apiError ??
-      ricaviSource.apiError ??
-      speseYearSource.apiError ??
-      ricaviYearSource.apiError ??
-      null
-    );
-  }, [
-    useMock,
-    speseSource.apiError,
-    ricaviSource.apiError,
-    speseYearSource.apiError,
-    ricaviYearSource.apiError,
-  ]);
-
-  /**
-   * Movimenti/tiles (mock per ora).
-   */
-  const movimenti = (BILANCIO_MOVIMENTI_MOCK as any)[timeKey] ?? (BILANCIO_MOVIMENTI_MOCK as any).anno;
-  const tiles = (BILANCIO_TILES_MOCK as any)[timeKey] ?? (BILANCIO_TILES_MOCK as any).anno;
-
-  /**
-   * ✅ ISTOGRAMMA (come avevi)
-   */
   const barPack = useMemo(() => {
-    const ricaviMonthly =
-      timeKey === "anno_fiscale"
-        ? (ricaviYearComputed as any).monthly ?? []
-        : (ricaviComputed as any).monthly ?? [];
-
-    const speseMonthly =
-      timeKey === "anno_fiscale"
-        ? (speseYearComputed as any).monthly ?? []
-        : (speseComputed as any).monthly ?? [];
+    const ricaviMonthly = timeKey === "anno_fiscale" ? ricaviYearMonthly : ricaviSelectedMonthly;
+    const speseMonthly = timeKey === "anno_fiscale" ? speseYearMonthly : speseSelectedMonthly;
 
     return buildMonthlyBarFromModules({
       timeKey,
@@ -284,20 +277,25 @@ export default function BilancioOverview() {
       colors: ["#22C55E", "#EF4444"],
       tuttoMonths: 36,
     });
-  }, [
-    timeKey,
-    (ricaviComputed as any).monthly,
-    (speseComputed as any).monthly,
-    (ricaviYearComputed as any).monthly,
-    (speseYearComputed as any).monthly,
-  ]);
+  }, [timeKey, ricaviYearMonthly, ricaviSelectedMonthly, speseYearMonthly, speseSelectedMonthly]);
 
-  /* ------------------------------------------------------------------ */
-  /* ✅ ANTI-FLASH PACK per Grid2                                        */
-  /* ------------------------------------------------------------------ */
+  const movimenti = useMemo(
+    () => buildLiveMovimenti({ ricaviData: ricaviSource.apiData, speseData: speseSource.apiData, timeKey }),
+    [ricaviSource.apiData, speseSource.apiData, timeKey],
+  );
 
-  const nextGrid2Pack = useMemo<Grid2Pack>(() => {
-    return {
+  const barRicavi = useMemo(() => (Array.isArray(barPack.series?.[0]?.data) ? barPack.series[0].data : []), [barPack.series]);
+  const barSpese = useMemo(() => (Array.isArray(barPack.series?.[1]?.data) ? barPack.series[1].data : []), [barPack.series]);
+  const monthlyMargins = useMemo(
+    () => barRicavi.map((value: number, index: number) => value - (barSpese[index] ?? 0)),
+    [barRicavi, barSpese],
+  );
+  const avgMonthlyMargin = useMemo(() => average(monthlyMargins), [monthlyMargins]);
+  const avgMonthlyRicavi = useMemo(() => average(barRicavi), [barRicavi]);
+  const positiveMonths = useMemo(() => monthlyMargins.filter((value) => value >= 0).length, [monthlyMargins]);
+
+  const nextGrid2Pack = useMemo<Grid2Pack>(
+    () => ({
       ricaviDonutData: (ricaviComputed.categoriesCurrent as any) ?? [],
       ricaviDonutColors: ((ricaviComputed.donutColors as any) ?? ["#22C55E", "#0ABEF9"]) as any,
       speseDonutData: (speseComputed.categoriesCurrent as any) ?? [],
@@ -305,58 +303,35 @@ export default function BilancioOverview() {
       barCategories: barPack.categories,
       barSeries: barPack.series as any,
       barColors: barPack.colors,
-    };
-  }, [
-    ricaviComputed.categoriesCurrent,
-    ricaviComputed.donutColors,
-    speseComputed.categoriesCurrent,
-    speseComputed.donutColors,
-    barPack.categories,
-    barPack.series,
-    barPack.colors,
-  ]);
+    }),
+    [ricaviComputed.categoriesCurrent, ricaviComputed.donutColors, speseComputed.categoriesCurrent, speseComputed.donutColors, barPack],
+  );
 
   const lastGoodGrid2PackRef = useRef<Grid2Pack | null>(null);
-
-  // aggiorna “last good” SOLO quando API ha finito (o quando sei in mock)
   useEffect(() => {
-    if (useMock) {
-      lastGoodGrid2PackRef.current = nextGrid2Pack;
-      return;
-    }
     if (apiStatus === "succeeded") {
       lastGoodGrid2PackRef.current = nextGrid2Pack;
     }
-  }, [useMock, apiStatus, nextGrid2Pack]);
+  }, [apiStatus, nextGrid2Pack]);
 
   const grid2Pack = useMemo<Grid2Pack>(() => {
-    // in mock: sempre subito (nessun problema)
-    if (useMock) return nextGrid2Pack;
-
-    // in API:
-    // - se sto caricando/idle e ho già un pack buono → tienilo (no flash)
     if ((apiStatus === "loading" || apiStatus === "idle") && lastGoodGrid2PackRef.current) {
       return lastGoodGrid2PackRef.current;
     }
-
-    // - se non ho ancora nulla (primo load) → mostra comunque quello che hai (probabilmente vuoto),
-    //   ma qui idealmente hai overlay globale
     return nextGrid2Pack;
-  }, [useMock, apiStatus, nextGrid2Pack]);
+  }, [apiStatus, nextGrid2Pack]);
 
   return (
     <>
       <Header
         currentPeriodLabel={PERIOD_LABEL[timeKey]}
         timeKey={timeKey}
-        setTimeKey={(v) =>
+        setTimeKey={(value) =>
           startTransition(() => {
-            setTimeKey(v);
+            setTimeKey(value);
           })
         }
         isPending={isPending}
-        useMock={useMock}
-        toggleUseMock={() => setUseMock((v) => !v)}
         apiStatus={apiStatus}
         apiError={apiError}
         TIME_OPTIONS={BILANCIO_TIME_OPTIONS as any}
@@ -374,7 +349,6 @@ export default function BilancioOverview() {
         movimenti={movimenti}
       />
 
-      {/* 4 tiles sotto */}
       <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiTile
           title="Simulatore Tassa Utile"
@@ -389,15 +363,15 @@ export default function BilancioOverview() {
           icon={<IconReceipt />}
         />
         <KpiTile
-          title="Bilancio TFR"
-          value={euro(tiles.k3)}
-          sub="Legato a filtri temporali"
+          title="Margine medio mensile"
+          value={signedEuro(avgMonthlyMargin)}
+          sub={`${positiveMonths}/${Math.max(monthlyMargins.length, 1)} mesi positivi`}
           icon={<IconTrend />}
         />
         <KpiTile
-          title="Media bilancio trimestrale"
-          value={euro(tiles.k4)}
-          sub="Legato a filtri temporali"
+          title="Ricavo medio mensile"
+          value={euro(avgMonthlyRicavi)}
+          sub={`Media su ${Math.max(barRicavi.length, 1)} mesi del filtro`}
           icon={<IconPie />}
         />
       </div>
@@ -413,13 +387,15 @@ export default function BilancioOverview() {
           barSeries={grid2Pack.barSeries}
           barColors={grid2Pack.barColors}
           notes={[
-            { label: "Utile fiscale (live)", value: euro(Math.max(0, utileFiscale)), hint: "Da Gennaio a oggi" },
-            { label: "Tassa utile (live)", value: euro(tax.tax), hint: "26% su utile fiscale positivo" },
-            { label: "Margine periodo", value: gauge.relativePctLabel, hint: "Su ricavi/spese del filtro" },
-            { label: "Saldo periodo", value: signedEuro(gauge.profit) },
+            { label: "Utile fiscale", value: euro(Math.max(0, utileFiscale)), hint: "Da Gennaio a oggi" },
+            { label: "Tassa utile", value: euro(tax.tax), hint: "26% su utile fiscale positivo" },
+            { label: "Margine periodo", value: gauge.relativePctLabel, hint: "Rapporto utile/perdita sul periodo" },
+            { label: "Saldo periodo", value: signedEuro(gauge.profit), hint: `${positiveMonths} mesi positivi nel filtro` },
           ]}
         />
       </div>
     </>
   );
 }
+
+

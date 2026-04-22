@@ -127,12 +127,12 @@ export default function AulaEdit({ id, type }: Props) {
 
   const initialBase = {
     data: current?.campi ?? {},
-    visibilityRole: current?.visibilityRole ?? null,
+    visibilityRoles: current?.visibilityRole ? [current.visibilityRole] : [],
   };
 
   const handleSubmit = async (base: {
     data: Record<string, any>;
-    visibilityRole: string | null;
+    visibilityRoles: string[];
   }) => {
     setSaving(true);
     try {
@@ -149,7 +149,8 @@ export default function AulaEdit({ id, type }: Props) {
           id,
           campi: base.data,
           partecipanti: payloadPartecipanti,
-          visibilityRole: base.visibilityRole,
+          // La pipeline "aule" è ancora single-role: persistiamo il primo valore selezionato.
+          visibilityRole: base.visibilityRoles[0] ?? null,
         } as any),
       ).unwrap();
 
@@ -277,7 +278,6 @@ export default function AulaEdit({ id, type }: Props) {
       <EditAttachmentsPanel
         documentTypes={aulaDef.documentTypes ?? ["altro"]}
         attachments={attachments}
-        canUpload={!!current?.id}
         onUpload={async ({ file, attachmentType, title }) => {
           if (!current?.id) return;
           const fd = new FormData();

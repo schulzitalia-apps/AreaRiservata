@@ -113,7 +113,7 @@ export default function InviteAcceptClient({ token }: { token: string }) {
       setStatus("done");
 
       // redirect dove vuoi
-      router.replace("/login");
+      router.replace("/auth/sign-in");
     } catch (e: any) {
       setNotice({ type: "error", text: e?.message || "Errore salvataggio password." });
       setStatus("ready");

@@ -11,9 +11,6 @@ type Props = {
 
   isPending: boolean;
 
-  useMock: boolean;
-  toggleUseMock: () => void;
-
   apiStatus?: string; // aggregata
   apiError?: any;     // aggregato
 
@@ -33,23 +30,13 @@ export function Header(props: Props) {
             {props.currentPeriodLabel}
           </span>
 
-          {/* Toggle Mock/API */}
-          <button
-            type="button"
-            onClick={props.toggleUseMock}
-            className="rounded-full border border-stroke bg-white/60 px-3 py-1 text-xs font-extrabold text-gray-700 hover:bg-white dark:border-dark-3 dark:bg-gray-dark/40 dark:text-white/80 dark:hover:bg-dark-2"
-            title="Switch Mock/API"
-          >
-            {props.useMock ? "Mock" : "API"}
-          </button>
-
-          {!props.useMock && props.apiStatus === "loading" ? (
+          {props.apiStatus === "loading" ? (
             <span className="rounded-full border border-stroke bg-white/60 px-3 py-1 text-xs font-extrabold text-gray-700 dark:border-dark-3 dark:bg-gray-dark/40 dark:text-white/70">
               Caricamento…
             </span>
           ) : null}
 
-          {!props.useMock && props.apiStatus === "failed" ? (
+          {props.apiStatus === "failed" ? (
             <span className="rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs font-extrabold text-red-500">
               Errore API
             </span>
@@ -66,7 +53,7 @@ export function Header(props: Props) {
           {props.insightLine}
         </div>
 
-        {!props.useMock && props.apiError ? (
+        {props.apiError ? (
           <div className="mt-2 text-xs font-semibold text-red-500/90">{String(props.apiError)}</div>
         ) : null}
       </div>

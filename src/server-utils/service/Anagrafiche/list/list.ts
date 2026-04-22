@@ -1,5 +1,6 @@
 // src/server-utils/service/Anagrafiche/list/list.ts
 import type { FilterQuery } from "mongoose";
+import mongoose from "mongoose";
 
 import { connectToDatabase } from "@/server-utils/lib/mongoose-connection";
 import { getAnagraficaModel } from "@/server-utils/models/Anagrafiche/anagrafiche.factory";
@@ -67,6 +68,7 @@ export type ListAnagraficheParams = {
    * - se presente => include SOLO quei data.<field>, whitelistati su def.fields
    */
   fields?: FieldKey[];
+  ids?: string[];
 
   auth: AuthContext;
 };
@@ -83,6 +85,7 @@ export async function listAnagrafiche(
     visibilityRole,
     sort: sortKey,
     fields,
+    ids,
     auth,
   } = params;
 
@@ -101,6 +104,18 @@ export async function listAnagrafiche(
     docType,
     visibilityRole,
   });
+
+  if (ids?.length) {
+    const validIds = ids
+      .filter((id) => mongoose.isValidObjectId(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
+
+    if (!validIds.length) {
+      return { items: [], total: 0 };
+    }
+
+    (baseFilter as any)._id = { $in: validIds };
+  }
 
   // 3) ACL centralizzato
   // Nota typing:

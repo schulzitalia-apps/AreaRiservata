@@ -1,7 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
-import clsx from "clsx";
+import { AppBadge } from "@/components/ui";
+import { cn } from "@/server-utils/lib/utils";
 
 export type InfoPillTone =
   | "neutral"
@@ -21,53 +22,52 @@ interface InfoPillProps {
   className?: string;
 }
 
-const toneMap: Record<InfoPillTone, string> = {
-  neutral:
-    "bg-slate-100/80 text-slate-700 border-slate-300/50 dark:bg-white/5 dark:text-white/80 dark:border-white/10",
-
-  primary:
-    "bg-primary/10 text-primary border-primary/30 dark:bg-primary/20 dark:text-primary-100 dark:border-primary/40",
-
+const toneClassMap: Record<InfoPillTone, string> = {
+  neutral: "",
+  primary: "",
   secondary:
-    "bg-gray-200/60 text-gray-800 border-gray-300 dark:bg-gray-700/40 dark:text-gray-100 dark:border-gray-500/50",
-
-  success:
-    "bg-emerald-500/10 text-emerald-600 border-emerald-500/30 dark:bg-emerald-400/20 dark:text-emerald-100 dark:border-emerald-400/40",
-
-  warning:
-    "bg-amber-400/15 text-amber-700 border-amber-400/40 dark:bg-amber-300/20 dark:text-amber-100 dark:border-amber-300/40",
-
-  danger:
-    "bg-red-500/10 text-red-600 border-red-500/30 dark:bg-red-400/20 dark:text-red-100 dark:border-red-400/40",
-
+    "border-slate-300/70 bg-slate-100/90 text-slate-700 dark:border-slate-500/40 dark:bg-slate-700/30 dark:text-slate-100",
+  success: "",
+  warning: "",
+  danger: "",
   info:
-    "bg-cyan-500/10 text-cyan-600 border-cyan-500/30 dark:bg-cyan-400/20 dark:text-cyan-100 dark:border-cyan-400/40",
-
-  sky:
-    "bg-sky-500/10 text-sky-600 border-sky-500/30 dark:bg-sky-400/20 dark:text-sky-100 dark:border-sky-400/40",
-
+    "border-cyan-500/30 bg-cyan-500/10 text-cyan-700 dark:border-cyan-400/40 dark:bg-cyan-400/20 dark:text-cyan-100",
+  sky: "",
   violet:
-    "bg-violet-500/10 text-violet-600 border-violet-500/30 dark:bg-violet-400/20 dark:text-violet-100 dark:border-violet-400/40",
-
+    "border-violet-500/30 bg-violet-500/10 text-violet-700 dark:border-violet-400/40 dark:bg-violet-400/20 dark:text-violet-100",
   rose:
-    "bg-rose-500/10 text-rose-600 border-rose-500/30 dark:bg-rose-400/20 dark:text-rose-100 dark:border-rose-400/40",
+    "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:border-rose-400/40 dark:bg-rose-400/20 dark:text-rose-100",
+};
+
+const baseToneMap: Record<InfoPillTone, "neutral" | "primary" | "success" | "warning" | "danger" | "info"> = {
+  neutral: "neutral",
+  primary: "primary",
+  secondary: "neutral",
+  success: "success",
+  warning: "warning",
+  danger: "danger",
+  info: "info",
+  sky: "info",
+  violet: "info",
+  rose: "danger",
 };
 
 export function InfoPill({
-                           children,
-                           tone = "neutral",
-                           className,
-                         }: InfoPillProps) {
+  children,
+  tone = "neutral",
+  className,
+}: InfoPillProps) {
   return (
-    <span
-      className={clsx(
-        "inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-medium",
-        "backdrop-blur-sm shadow-sm hover:shadow-md transition-shadow duration-150",
-        toneMap[tone],
+    <AppBadge
+      tone={baseToneMap[tone]}
+      size="sm"
+      className={cn(
+        "backdrop-blur-sm shadow-sm transition-shadow duration-150 hover:shadow-md",
+        toneClassMap[tone],
         className,
       )}
     >
       {children}
-    </span>
+    </AppBadge>
   );
 }

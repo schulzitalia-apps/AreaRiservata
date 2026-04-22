@@ -1,3 +1,5 @@
+import type { ChatProvider, ChatProviderKind } from "@/server-utils/llm";
+
 /**
  * types.ts
  * --------
@@ -56,7 +58,7 @@ export type RunEvent =
 export type ModelRegistry = Record<
   string, // modelRef (es. "fast")
   {
-    provider: "groq";
+    provider: ChatProviderKind;
     model: string; // nome modello reale (es. "llama-3.1-8b-instant")
     temperature?: number;
   }
@@ -89,13 +91,7 @@ export type NodeDef = LlmNode;
  * Interfaccia del provider LLM (qui: Groq).
  * Noi vogliamo astrarre: il runner chiama “llm.chat(...)” e basta.
  */
-export type LlmProvider = {
-  chat: (args: {
-    model: string;
-    temperature: number;
-    messages: { role: "system" | "user" | "assistant"; content: string }[];
-  }) => Promise<string>;
-};
+export type LlmProvider = ChatProvider;
 
 /**
  * Interfaccia per la memoria persistente.

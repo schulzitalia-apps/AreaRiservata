@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/server-utils/lib/auth-guards";
-import { composeMailWithGroq } from "@/server-utils/anima/mailComposer";
+import { composeMailWithLlm } from "@/server-utils/anima/mailComposer";
 
 export const runtime = "nodejs";
 
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     const userGoal = typeof body?.userGoal === "string" ? body.userGoal.trim() : undefined;
     const language = body?.language === "en" ? "en" : "it";
 
-    const out = await composeMailWithGroq({
+    const out = await composeMailWithLlm({
       templateKey,
       currentVars,
       anagrafica: anagrafica?.typeSlug && anagrafica?.id ? anagrafica : undefined,

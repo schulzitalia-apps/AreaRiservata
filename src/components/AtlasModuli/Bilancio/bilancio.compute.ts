@@ -6,12 +6,10 @@ function pctLabel(v01OrMore: number) {
 }
 
 export function computeBilancioGauge(totals: BilancioTotals): BilancioGaugeData {
-  const ricavi = Math.max(0, Math.round(Number(totals.ricavi || 0)));
-  const spese = Math.max(0, Math.round(Number(totals.spese || 0)));
-
-  const profit = Math.round(ricavi - spese);
+  const ricavi = Math.max(0, Number(totals.ricavi || 0));
+  const spese = Math.max(0, Number(totals.spese || 0));
+  const profit = ricavi - spese;
   const isProfit = profit >= 0;
-
   const denom = isProfit ? ricavi : spese;
   const relativePct = denom > 0 ? Math.abs(profit) / denom : 0;
 

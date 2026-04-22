@@ -18,6 +18,7 @@ export function createGroqProvider(apiKey: string): LlmProvider {
   }
 
   return {
+    kind: "groq",
     /**
      * chat(...)
      * --------
@@ -44,7 +45,23 @@ export function createGroqProvider(apiKey: string): LlmProvider {
       }
 
       const data: any = await res.json();
-      return String(data?.choices?.[0]?.message?.content ?? "").trim();
+      return {
+        content: String(data?.choices?.[0]?.message?.content ?? "").trim(),
+        usage: {
+          inputTokens:
+            typeof data?.usage?.prompt_tokens === "number"
+              ? data.usage.prompt_tokens
+              : null,
+          outputTokens:
+            typeof data?.usage?.completion_tokens === "number"
+              ? data.usage.completion_tokens
+              : null,
+          totalTokens:
+            typeof data?.usage?.total_tokens === "number"
+              ? data.usage.total_tokens
+              : null,
+        },
+      };
     },
   };
 }

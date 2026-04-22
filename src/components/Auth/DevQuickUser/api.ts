@@ -1,5 +1,12 @@
 import type { AppRole } from "@/types/roles";
-import type { UserAdmin, InviteResult, UserAnagraficaAssigned } from "./types";
+import type {
+  UserAdmin,
+  InviteResult,
+  BulkInviteCreateResult,
+  BulkInvitePreviewResult,
+  UserAnagraficaAssigned,
+  UserAulaAssigned,
+} from "./types";
 import type { BarcodeActionId } from "@/config/barcode.config";
 
 async function readJson(res: Response) {
@@ -19,6 +26,8 @@ export async function apiListUsers(): Promise<UserAdmin[]> {
     email: u.email,
     role: u.role as AppRole,
     approved: u.approved,
+    pendingInviteExpiresAt: u.pendingInviteExpiresAt ?? null,
+    pendingInviteExpired: !!u.pendingInviteExpired,
   }));
 }
 
@@ -58,8 +67,70 @@ export async function apiCreateInvite(args: {
     inviteLink: json.inviteLink,
     expiresAt: json.expiresAt,
     mailSent: !!json.mailSent,
+    userId: json.userId ?? undefined,
+    mode: json.mode ?? undefined,
     messageId: json.messageId ?? null, // ✅ nuovo (se presente)
   };
+}
+
+export async function apiRegenerateInvite(args: {
+  userId: string;
+  expiresInHours: number;
+  sendEmail: boolean;
+}): Promise<InviteResult> {
+  const res = await fetch("/api/admin/invitations/regenerate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(args),
+  });
+  const json = await readJson(res);
+
+  return {
+    email: json.email,
+    inviteLink: json.inviteLink,
+    expiresAt: json.expiresAt,
+    mailSent: !!json.mailSent,
+    userId: json.userId ?? undefined,
+    mode: json.mode ?? undefined,
+    messageId: json.messageId ?? null,
+  };
+}
+
+export async function apiPreviewBulkInvites(args: {
+  sourceKind: "anagrafica" | "aula";
+  sourceType: string;
+  sourceIds: string[];
+  emailFieldKey: string;
+  nameFieldKey: string;
+}): Promise<BulkInvitePreviewResult> {
+  const res = await fetch("/api/admin/invitations/bulk-preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(args),
+  });
+  return await readJson(res);
+}
+
+export async function apiCreateBulkInvites(args: {
+  sourceKind: "anagrafica" | "aula";
+  sourceType: string;
+  sourceIds: string[];
+  emailFieldKey: string;
+  nameFieldKey: string;
+  role: AppRole;
+  expiresInHours: number;
+  sendEmail: boolean;
+  throttleMs: number;
+}): Promise<BulkInviteCreateResult> {
+  const res = await fetch("/api/admin/invitations/bulk-create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(args),
+  });
+  return await readJson(res);
 }
 
 export async function apiListAssignedAnagrafiche(userId: string): Promise<UserAnagraficaAssigned[]> {
@@ -141,6 +212,88 @@ export async function apiSearchAnagrafiche(args: {
     id: m.id,
     displayName: m.displayName || "(senza titolo)",
     subtitle: m.subtitle ?? null,
+  }));
+}
+
+export async function apiListAssignedAule(userId: string): Promise<UserAulaAssigned[]> {
+  const res = await fetch(
+    `/api/admin/users/${encodeURIComponent(userId)}/aule-keys`,
+    { credentials: "include" }
+  );
+  const json = await readJson(res);
+  const items = (json.items || []) as any[];
+
+  return items.map((it) => ({
+    type: it.type,
+    aulaId: it.aulaId,
+    displayName: it.displayName,
+    subtitle: it.subtitle ?? null,
+    updatedAt: it.updatedAt ?? null,
+  }));
+}
+
+export async function apiAttachAula(args: {
+  userId: string;
+  aulaType: string;
+  aulaId: string;
+}): Promise<void> {
+  const res = await fetch(
+    `/api/admin/users/${encodeURIComponent(args.userId)}/aule-keys`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        aulaType: args.aulaType,
+        aulaId: args.aulaId,
+      }),
+    }
+  );
+  await readJson(res);
+}
+
+export async function apiDetachAula(args: {
+  userId: string;
+  aulaType: string;
+  aulaId: string;
+}): Promise<void> {
+  const res = await fetch(
+    `/api/admin/users/${encodeURIComponent(args.userId)}/aule-keys`,
+    {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        aulaType: args.aulaType,
+        aulaId: args.aulaId,
+      }),
+    }
+  );
+  await readJson(res);
+}
+
+export async function apiSearchAule(args: {
+  typeSlug: string;
+  query: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<{ id: string; displayName: string; subtitle: string | null }[]> {
+  const params = new URLSearchParams();
+  if (args.query.trim()) params.set("query", args.query.trim());
+  params.set("page", String(args.page ?? 1));
+  params.set("pageSize", String(args.pageSize ?? 20));
+
+  const res = await fetch(
+    `/api/aule/${encodeURIComponent(args.typeSlug)}?${params.toString()}`,
+    { credentials: "include" }
+  );
+  const json = await readJson(res);
+  const items = (json.items || []) as any[];
+
+  return items.map((m) => ({
+    id: m.id,
+    displayName: m.label || "(senza titolo)",
+    subtitle: m.ownerName ?? null,
   }));
 }
 

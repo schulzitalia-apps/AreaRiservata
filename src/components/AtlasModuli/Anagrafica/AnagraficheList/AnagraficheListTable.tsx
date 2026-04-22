@@ -12,7 +12,12 @@ import { RowActions } from "@/components/AtlasModuli/common/RowActions";
 import { ConfirmDialog } from "@/components/AtlasModuli/common/ConfirmDialog";
 import { ReferencePill } from "@/components/AtlasModuli/common/ReferencePreviewCell";
 
-import { isReferenceField, type FieldDef, type FieldKey } from "@/config/anagrafiche.fields.catalog";
+import {
+  isReferenceField,
+  isReferenceMultiField,
+  type FieldDef,
+  type FieldKey,
+} from "@/config/anagrafiche.fields.catalog";
 
 import { RowHoverPreview } from "./RowHoverPreview";
 import {
@@ -97,7 +102,7 @@ export function AnagraficheListTable({
   }, [columnKeys, showVisibilityColumn]);
 
   const wrapIfHoverEnabled = (it: AnagraficaPreview, rowContent: React.ReactNode) => {
-    if (!hoverEnabled) return rowContent;
+    if (!hoverEnabled) return <React.Fragment key={it.id}>{rowContent}</React.Fragment>;
 
     const title = buildTitle(it, def, titleKeys, referenceLabelsByField);
     const subtitle = buildSubtitle(it, def, subtitleKeys) ?? undefined;
@@ -470,6 +475,14 @@ function buildTitle(
     if (fd && isReferenceField(fd)) {
       const idStr = String(raw);
       parts.push(referenceLabelsByField[fk]?.[idStr] ?? idStr);
+    } else if (fd && isReferenceMultiField(fd) && Array.isArray(raw)) {
+      const labels = raw
+        .map((item) => {
+          const idStr = String(item ?? "").trim();
+          return idStr ? referenceLabelsByField[fk]?.[idStr] ?? idStr : "";
+        })
+        .filter(Boolean);
+      if (labels.length) parts.push(labels.join(", "));
     } else {
       parts.push(formatFieldValue(fd, raw));
     }
@@ -503,6 +516,15 @@ function renderCellValuePlain(
     const idStr = String(raw);
     return referenceLabelsByField[fk]?.[idStr] ?? idStr;
   }
+  if (fd && isReferenceMultiField(fd) && Array.isArray(raw)) {
+    return raw
+      .map((item) => {
+        const idStr = String(item ?? "").trim();
+        return idStr ? referenceLabelsByField[fk]?.[idStr] ?? idStr : "";
+      })
+      .filter(Boolean)
+      .join(", ");
+  }
   return formatFieldValue(fd, raw);
 }
 
@@ -522,6 +544,17 @@ function renderCellValue(
   if (fd && isReferenceField(fd)) {
     const idStr = String(raw);
     const label = referenceLabelsByField[fk]?.[idStr] ?? idStr;
+    return <span className="truncate">{label}</span>;
+  }
+
+  if (fd && isReferenceMultiField(fd) && Array.isArray(raw)) {
+    const label = raw
+      .map((item) => {
+        const idStr = String(item ?? "").trim();
+        return idStr ? referenceLabelsByField[fk]?.[idStr] ?? idStr : "";
+      })
+      .filter(Boolean)
+      .join(", ");
     return <span className="truncate">{label}</span>;
   }
 

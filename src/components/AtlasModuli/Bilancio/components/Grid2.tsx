@@ -67,9 +67,9 @@ function MiniDonutLinkCard(props: {
             valueFormatter={(n) => euro(n)}
             colors={props.colors as any}
             donutSize="76%"
-            showLegend={false}
+            showLegend
             glow
-            className="-mx-2"
+            className="sm:-mx-2"
           />
         </div>
       </Card>
@@ -127,7 +127,7 @@ export function Grid2(props: Props) {
       {/* DESTRA: “cose simili” (mock) */}
       <div className="lg:col-span-3">
         <Card className="h-full">
-          <CardHeader title="Indicatori" subTitle="Mock per ora" />
+          <CardHeader title="Indicatori" subTitle="Live" />
           <div className="px-4 pb-5 pt-2">
             <div className="space-y-3">
               {props.notes.map((r, i) => (
@@ -149,3 +149,4 @@ export function Grid2(props: Props) {
     </div>
   );
 }
+

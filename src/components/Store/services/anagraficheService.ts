@@ -27,6 +27,7 @@ export const anagraficheService = {
      * projection dinamica: fields ripetuto o csv (qui usiamo ripetuto)
      */
     fields?: string[];
+    ids?: string[];
   }) {
     const {
       type,
@@ -38,6 +39,7 @@ export const anagraficheService = {
       sortKey,
       sortDir,
       fields,
+      ids,
     } = params;
 
     const qs = new URLSearchParams();
@@ -54,6 +56,9 @@ export const anagraficheService = {
     // NEW: fields projection (ripetuto)
     if (fields?.length) {
       for (const f of fields) qs.append("fields", f);
+    }
+    if (ids?.length) {
+      for (const id of ids) qs.append("ids", id);
     }
 
     return apiClient.get<{

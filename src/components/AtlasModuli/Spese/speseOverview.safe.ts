@@ -26,8 +26,33 @@ export function isoMonthLabel(isoMonth: string) {
   });
 }
 
+function normalizeNumericString(raw: string): string {
+  const compact = raw.trim().replace(/\s+/g, "");
+  if (!compact) return "";
+
+  const hasComma = compact.includes(",");
+  const dotCount = (compact.match(/\./g) ?? []).length;
+
+  if (hasComma) {
+    return compact.replace(/\./g, "").replace(",", ".");
+  }
+
+  if (dotCount > 1) {
+    const parts = compact.split(".");
+    const decimal = parts.pop() ?? "";
+    return `${parts.join("")}.${decimal}`;
+  }
+
+  return compact;
+}
+
 export function safeNum(x: any): number {
-  const n = typeof x === "number" ? x : Number(x);
+  const n =
+    typeof x === "number"
+      ? x
+      : typeof x === "string"
+        ? Number(normalizeNumericString(x))
+        : Number(x);
   return Number.isFinite(n) ? n : 0;
 }
 

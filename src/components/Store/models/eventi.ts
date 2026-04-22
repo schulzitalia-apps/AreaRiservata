@@ -52,10 +52,15 @@ export type EventoPreview = {
   timeKind: TimeKind;
   startAt?: string | null;
   endAt?: string | null;
+  allDay?: boolean;
   updatedAt: string;
   visibilityRole?: string | null;
   ownerId?: string | null;
   ownerName?: string | null;
+  data?: Record<string, any>;
+  partecipanti?: EventoPartecipanteView[];
+  gruppo?: EventoGruppoView | null;
+  _autoEvent?: string | null;
 };
 
 export type EventoFull = {
@@ -75,4 +80,5 @@ export type EventoFull = {
 
   createdAt?: string;
   updatedAt?: string;
+  _autoEvent?: string | null;
 };

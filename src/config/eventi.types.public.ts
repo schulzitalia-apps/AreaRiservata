@@ -183,6 +183,33 @@ export const EVENTO_TYPES: readonly PublicEventoTypeDef[] = [
     },
   },
   {
+    slug: "avvisi_accessori",
+    label: "Accessori",
+    fields: [
+      "titolo",
+      "descrizione",
+      "stato",
+      "priorita",
+      "tipoAvviso",
+    ],
+    preview: {
+      title: ["titolo"],
+      subtitle: ["tipoAvviso", "priorita"],
+      searchIn: ["titolo", "descrizione"],
+    },
+    allowedAnagraficaTypes: ["clienti", "conferme-ordine"],
+    allowedAulaTypes: ["cantieri", "agenti"],
+    allowedTimeKinds: ["point", "deadline"],
+    documentTypes: ["documento", "screenshot", "altro"],
+    detailCard: {
+      coverSrc: "/images/illustration/cover/cover-01.png",
+      avatarSrc: "/images/illustration/avatar/avatar-01.png",
+      headerVariant: "cover-avatar",
+      avatarSize: "medium",
+      hoverEffect: true,
+    },
+  },
+  {
     slug: "avvisi_pronto",
     label: "Pronto a Magazzino",
     fields: [

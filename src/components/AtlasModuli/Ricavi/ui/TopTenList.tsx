@@ -1,21 +1,22 @@
-import type { Txn } from "../types";
+﻿import type { Txn } from "../types";
 import { euro } from "../format";
 
 export function TopTenList({ rows }: { rows: Txn[] }) {
   return (
     <div className="space-y-3">
-      {rows.map((r, idx) => (
+      {rows.map((row, index) => (
         <div
-          key={r.id}
+          key={row.id}
           className="rounded-2xl border border-stroke bg-white p-3 dark:border-dark-3 dark:bg-gray-dark"
         >
           <div className="min-w-0">
             <div className="text-sm font-black text-dark dark:text-white">
-              {idx + 1}) {r.title} <span className="text-gray-600 dark:text-dark-6">{euro(r.amount)}</span>
+              {index + 1}) {row.title}{" "}
+              <span className="text-gray-600 dark:text-dark-6">{euro(row.amount)}</span>
             </div>
             <div className="mt-1 text-xs font-semibold text-gray-500 dark:text-dark-6">
-              Fornitore: <span className="text-gray-700 dark:text-white/80">{r.supplier}</span> · Data:{" "}
-              <span className="text-gray-700 dark:text-white/80">{r.dateLabel}</span>
+              Cliente: <span className="text-gray-700 dark:text-white/80">{row.supplier || "-"}</span> - Data:{" "}
+              <span className="text-gray-700 dark:text-white/80">{row.dateLabel || "-"}</span>
             </div>
           </div>
         </div>

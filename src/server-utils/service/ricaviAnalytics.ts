@@ -59,6 +59,7 @@ export type RicaviAnalyticsResponse = {
   months: MonthRow[];
 
   top: {
+    currentPeriodTop: Record<string, TopRevenueItem[]>;
     paidOrInvoicedRecent: Record<string, TopRevenueItem[]>;
     programmatoRecent: Record<string, TopRevenueItem[]>;
     programmatoTop: Record<string, TopRevenueItem[]>;
@@ -73,8 +74,31 @@ function safeStr(x: any): string {
   return String(x).trim();
 }
 
+function normalizeNumericString(raw: string): string {
+  const compact = raw.trim().replace(/\s+/g, "");
+  if (!compact) return "";
+
+  const hasComma = compact.includes(",");
+  const dotCount = (compact.match(/\./g) ?? []).length;
+
+  if (hasComma) {
+    return compact.replace(/\./g, "").replace(",", ".");
+  }
+
+  if (dotCount > 1) {
+    const parts = compact.split(".");
+    const decimal = parts.pop() ?? "";
+    return `${parts.join("")}.${decimal}`;
+  }
+
+  return compact;
+}
+
 function safeNum(x: any): number {
-  const n = typeof x === "number" ? x : Number(String(x).replace(",", "."));
+  const n =
+    typeof x === "number"
+      ? x
+      : Number(normalizeNumericString(String(x ?? "")));
   return Number.isFinite(n) ? n : 0;
 }
 
@@ -124,10 +148,46 @@ const TO_DOUBLE_SAFE = (expr: any) =>
               { $or: [{ $eq: ["$$v", ""] }, { $eq: ["$$v", null] }] },
               null,
               {
-                $replaceAll: {
-                  input: { $toString: "$$v" },
-                  find: ",",
-                  replacement: ".",
+                $let: {
+                  vars: {
+                    compact: {
+                      $replaceAll: {
+                        input: { $toString: "$$v" },
+                        find: " ",
+                        replacement: "",
+                      },
+                    },
+                  },
+                  in: {
+                    $cond: [
+                      {
+                        $and: [
+                          { $gte: [{ $indexOfBytes: ["$$compact", ","] }, 0] },
+                          { $gte: [{ $indexOfBytes: ["$$compact", "."] }, 0] },
+                        ],
+                      },
+                      {
+                        $replaceAll: {
+                          input: {
+                            $replaceAll: {
+                              input: "$$compact",
+                              find: ".",
+                              replacement: "",
+                            },
+                          },
+                          find: ",",
+                          replacement: ".",
+                        },
+                      },
+                      {
+                        $replaceAll: {
+                          input: "$$compact",
+                          find: ",",
+                          replacement: ".",
+                        },
+                      },
+                    ],
+                  },
                 },
               },
             ],
@@ -327,6 +387,35 @@ export async function getRicaviAnalytics(params: {
           { $project: { _id: 0, variantId: "$_id" } },
         ],
 
+        topCurrentPeriodTop: [
+          { $match: { __effectiveDate: { $ne: null } } as any },
+          { $sort: { __lordo: -1, updatedAt: -1 } },
+          {
+            $group: {
+              _id: "$__variantId",
+              items: {
+                $push: {
+                  id: { $toString: "$_id" },
+                  titolo: "$__titolo",
+                  cliente: { $cond: [{ $eq: ["$__cliente", ""] }, null, "$__cliente"] },
+                  statoFatturazione: "$__stato",
+                  dataFatturazione: "$__dataFatturazione",
+                  dataPagamento: "$__dataPagamento",
+                  effectiveDate: "$__effectiveDate",
+                  lordo: "$__lordo",
+                  netto: "$__netto",
+                  iva: "$__iva",
+                  numeroFattura: "$__numeroFattura",
+                  categoriaRicavo: "$__categoriaRicavo",
+                  provenienzaCliente: "$__provenienzaCliente",
+                },
+              },
+            },
+          },
+          { $project: { _id: 0, variantId: "$_id", items: { $slice: ["$items", 10] } } },
+          { $sort: { variantId: 1 } },
+        ],
+
         // Top actuals recent (pagato/fatturato) dentro range
         topPaidOrInvoicedRecent: [
           { $match: { __effectiveDate: { $ne: null }, __stato: { $in: ["pagato", "fatturato"] } } as any },
@@ -456,6 +545,7 @@ export async function getRicaviAnalytics(params: {
   const agg = await Model.aggregate<{
     variants: VariantsRow[];
     monthsAgg: MonthAggRow[];
+    topCurrentPeriodTop: TopAggRow[];
     topPaidOrInvoicedRecent: TopAggRow[];
     topProgrammatoRecent: TopAggRow[];
     topProgrammatoTop: TopAggRow[];
@@ -465,6 +555,7 @@ export async function getRicaviAnalytics(params: {
   const first = agg?.[0] ?? {
     variants: [],
     monthsAgg: [],
+    topCurrentPeriodTop: [],
     topPaidOrInvoicedRecent: [],
     topProgrammatoRecent: [],
     topProgrammatoTop: [],
@@ -560,6 +651,7 @@ export async function getRicaviAnalytics(params: {
     variantIds,
     months,
     top: {
+      currentPeriodTop: buildTopMap(first.topCurrentPeriodTop),
       paidOrInvoicedRecent: buildTopMap(first.topPaidOrInvoicedRecent),
       programmatoRecent: buildTopMap(first.topProgrammatoRecent),
       programmatoTop: buildTopMap(first.topProgrammatoTop),

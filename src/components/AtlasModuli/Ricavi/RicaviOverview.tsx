@@ -1,37 +1,28 @@
-"use client";
+﻿"use client";
 
-import { useDeferredValue, useState, useTransition } from "react";
+import { useDeferredValue, useMemo, useState, useTransition } from "react";
+import { useAnagraficaVariants } from "@/components/AtlasModuli/Anagrafica/variants/useAnagraficaVariants";
+import { useReferenceBatchPreviewMulti } from "@/components/AtlasModuli/common/useReferenceBatchPreview";
+import { isReferenceField } from "@/config/anagrafiche.fields.catalog";
+import { getAnagraficaDef } from "@/config/anagrafiche.registry";
 
-// Local types
 import type { TimeKey } from "./types";
 import type { CatKey } from "./ricaviOverview.category";
 
-// Mock/constants
-import { TIME_OPTIONS } from "./mock";
-
-// Helpers
+import { TIME_OPTIONS } from "./config";
 import { euro, formatPct } from "./format";
 import { colorForKey } from "./ricaviOverview.safe";
-
-// UI atoms (NON TOCCARE)
-import {
-  KpiTile,
-  DeltaPill,
-  IconWallet,
-  IconReceipt,
-  IconTrend,
-  IconPie,
-} from "./ui";
-
-// Hooks (paralleli a spese)
+import { KpiTile, DeltaPill, IconWallet, IconReceipt, IconTrend, IconPie } from "./ui";
 import { useRicaviAnalyticsSource } from "./hooks/useRicaviAnalyticsSource";
 import { useRicaviMemos } from "./hooks/useRicaviMemos";
 import { useRicaviOverviewComputed } from "./hooks/useRicaviOverviewComputed";
-
-// Components (paralleli a spese)
 import { Header } from "./components/Header";
 import { Grid1 } from "./components/Grid1";
 import { Grid2 } from "./components/Grid2";
+
+const ricaviDef = getAnagraficaDef("ricavi");
+const customerField = ricaviDef.fields.clienteVendita;
+const customerReferenceConfig = isReferenceField(customerField) ? customerField.reference : null;
 
 export default function RicaviOverview() {
   const [timeKey, setTimeKey] = useState<TimeKey>("anno");
@@ -40,41 +31,66 @@ export default function RicaviOverview() {
   const deferredQ = useDeferredValue(q);
   const [isPending, startTransition] = useTransition();
 
-  // Data source (mock/API + fetch)
-  const { useMock, setUseMock, apiData, apiStatus, apiError } =
-    useRicaviAnalyticsSource(timeKey);
+  const { apiData, apiStatus, apiError } = useRicaviAnalyticsSource(timeKey);
+  const { options: variantOptions } = useAnagraficaVariants("ricavi", true);
 
-  // Computed data (derivati)
+  const variantLabelById = useMemo(
+    () => Object.fromEntries(variantOptions.map((variant: { variantId: string; label: string }) => [String(variant.variantId), variant.label])) as Record<string, string>,
+    [variantOptions],
+  );
+
   const computed = useRicaviOverviewComputed({
-    useMock,
     apiData,
     timeKey,
     catKey,
     setCatKey,
     q,
     deferredQ,
+    variantLabelById,
   });
 
-  // Memo state
-  const memo = useRicaviMemos(timeKey);
+  const customerIds = useMemo(() => {
+    if (!customerReferenceConfig) return [];
+    return computed.top10
+      .map((row: any) => String(row.supplier ?? ""))
+      .filter((id) => /^[a-f0-9]{24}$/i.test(id));
+  }, [computed.top10]);
 
-  const catColor =
-    computed.categoryMetaLike[String(catKey)]?.color ?? colorForKey(String(catKey));
+  const customerPreviewMap = useReferenceBatchPreviewMulti(
+    customerReferenceConfig
+      ? [
+          {
+            fieldKey: "clienteVendita",
+            config: customerReferenceConfig,
+            ids: customerIds,
+          },
+        ]
+      : [],
+  );
+
+  const top10 = useMemo(() => {
+    const labels = customerPreviewMap.clienteVendita ?? {};
+    return computed.top10.map((row: any) => ({
+      ...row,
+      supplier: labels[String(row.supplier)] ?? row.supplier ?? "—",
+    }));
+  }, [computed.top10, customerPreviewMap]);
+
+  const memo = useRicaviMemos(timeKey);
+  const catColor = computed.categoryMetaLike[String(catKey)]?.color ?? colorForKey(String(catKey));
 
   return (
     <>
       <Header
         currentPeriodLabel={computed.currentPeriodLabel}
         timeKey={timeKey}
-        setTimeKey={(v) =>
+        setTimeKey={(value) =>
           startTransition(() => {
-            setTimeKey(v);
+            setTimeKey(value);
           })
         }
         setCatKeyAll={() => setCatKey("all")}
         isPending={isPending}
-        useMock={useMock}
-        toggleUseMock={() => setUseMock((v) => !v)}
         apiStatus={apiStatus}
         apiError={apiError}
         TIME_OPTIONS={TIME_OPTIONS as any}
@@ -96,7 +112,6 @@ export default function RicaviOverview() {
         upcomingTotal={computed.upcomingTotal}
       />
 
-      {/* KPI FULL WIDTH */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiTile
           title="Totale ricavi"
@@ -121,16 +136,13 @@ export default function RicaviOverview() {
         <KpiTile
           title="Driver principale"
           value={computed.topCurrent?.label ?? "—"}
-          sub={`${formatPct(
-            ((computed.topCurrent?.value ?? 0) / Math.max(1, computed.currentLordo)) * 100,
-            0,
-          )} · ${euro(computed.topCurrent?.value ?? 0)}`}
+          sub={`${formatPct(((computed.topCurrent?.value ?? 0) / Math.max(1, computed.currentLordo)) * 100, 0)} · ${euro(computed.topCurrent?.value ?? 0)}`}
           icon={<IconPie />}
         />
       </div>
 
       <Grid2
-        top10={computed.top10}
+        top10={top10}
         catLabel={computed.catLabel}
         currentPeriodLabel={computed.currentPeriodLabel}
         catKey={catKey}
@@ -153,3 +165,5 @@ export default function RicaviOverview() {
     </>
   );
 }
+
+

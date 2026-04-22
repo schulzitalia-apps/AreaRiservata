@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getAnagraficaDef } from "@/config/anagrafiche.registry";
 import {
   isReferenceField,
+  isReferenceMultiField,
   type FieldKey,
   type FieldDef,
 } from "@/config/anagrafiche.fields.catalog";
@@ -58,6 +59,7 @@ export default function AnagraficheList({
   // UI STATE
   // ------------------------------
   const [query, setQuery] = useState("");
+  const [appliedQuery, setAppliedQuery] = useState("");
   const [docType, setDocType] = useState<string>("");
   const [ownerOnly, setOwnerOnly] = useState(false);
 
@@ -68,7 +70,7 @@ export default function AnagraficheList({
   const [sortKey, setSortKey] = useState<string>("");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
-  useEffect(() => setPage(1), [query, docType, ownerOnly, sortKey, sortDir]);
+  useEffect(() => setPage(1), [appliedQuery, docType, ownerOnly, sortKey, sortDir]);
 
   // ------------------------------
   // Title / Subtitle / SearchIn
@@ -122,6 +124,19 @@ export default function AnagraficheList({
     [hoverCfg],
   );
 
+  const referenceDisplayKeys = useMemo<FieldKey[]>(() => {
+    const seen = new Set<string>();
+    const out: FieldKey[] = [];
+    [...titleKeys, ...subtitleKeys, ...columnKeys, ...hoverKeys, ...referencePillKeys].forEach((key) => {
+      if (seen.has(String(key))) return;
+      const fieldDef = def.fields[key];
+      if (!isReferenceField(fieldDef) && !isReferenceMultiField(fieldDef)) return;
+      seen.add(String(key));
+      out.push(key);
+    });
+    return out;
+  }, [titleKeys, subtitleKeys, columnKeys, hoverKeys, referencePillKeys, def.fields]);
+
   // ------------------------------
   // Projection fields -> API
   // ------------------------------
@@ -140,7 +155,7 @@ export default function AnagraficheList({
   // Filters -> hook
   // ------------------------------
   const filters: AnagraficaFilters = {
-    query: query || undefined,
+    query: appliedQuery || undefined,
     docType: docType || undefined,
 
     // ⚠️ se OWNER non è un valore reale del backend, cambialo tu.
@@ -159,13 +174,15 @@ export default function AnagraficheList({
   // Reference previews batch
   // ------------------------------
   const referenceEntries = useMemo<ReferenceBatchEntry[]>(() => {
-    if (!showReferencePills) return [];
-
-    return referencePillKeys
+    return referenceDisplayKeys
       .map((fieldKey) => {
         const fieldDef = def.fields[fieldKey] as any;
         const ids = items
-          .map((p) => (p.data as any)?.[fieldKey])
+          .flatMap((p) => {
+            const raw = (p.data as any)?.[fieldKey];
+            if (Array.isArray(raw)) return raw;
+            return raw ? [raw] : [];
+          })
           .filter(Boolean)
           .map(String);
 
@@ -174,7 +191,7 @@ export default function AnagraficheList({
         return { fieldKey, config: fieldDef.reference, ids } as ReferenceBatchEntry;
       })
       .filter(Boolean) as ReferenceBatchEntry[];
-  }, [items, showReferencePills, referencePillKeys, def.fields]);
+  }, [items, referenceDisplayKeys, def.fields]);
 
   const referenceLabelsByField = useReferenceBatchPreviewMulti(referenceEntries);
 
@@ -189,6 +206,16 @@ export default function AnagraficheList({
     if (fd && isReferenceField(fd)) {
       const idStr = String(raw);
       return referenceLabelsByField[k]?.[idStr] ?? idStr;
+    }
+
+    if (fd && isReferenceMultiField(fd) && Array.isArray(raw)) {
+      return raw
+        .map((item) => {
+          const idStr = String(item ?? "").trim();
+          return idStr ? referenceLabelsByField[k]?.[idStr] ?? idStr : "";
+        })
+        .filter(Boolean)
+        .join(", ");
     }
 
     return formatFieldValue(fd, raw);
@@ -209,6 +236,11 @@ export default function AnagraficheList({
     }
   };
 
+  const onSearch = () => {
+    setAppliedQuery(query.trim());
+    setPage(1);
+  };
+
   const emptyMessage = query || docType ? "Nessun risultato" : "Nessun elemento";
 
   return (
@@ -218,6 +250,7 @@ export default function AnagraficheList({
         cfg={cfg}
         total={total}
         loading={loading}
+        searching={query.trim() !== appliedQuery}
         canCreate={canCreate}
         type={type}
         query={query}
@@ -230,6 +263,7 @@ export default function AnagraficheList({
         totalPages={totalPages}
         pageSize={pageSize}
         onQueryChange={setQuery}
+        onSearch={onSearch}
         onDocTypeChange={setDocType}
         onOwnerOnlyChange={setOwnerOnly}
         onSortByKey={onSortByKey}

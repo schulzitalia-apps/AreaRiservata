@@ -1,4 +1,4 @@
-// src/components/Store/store.ts (o dove ce l'hai)
+// src/components/Store/store.ts
 
 import { configureStore } from "@reduxjs/toolkit";
 
@@ -15,11 +15,14 @@ import notificheReducer from "@/components/Store/slices/notificheSlice";
 import statsReducer from "./slices/statsSlice";
 import financialsReducer from "@/components/Store/slices/financialsSlice";
 
-// ✅ NEW: conferme-ordine analytics slice
-import confermeOrdineAnalyticsReducer from "@/components/Store/slices/confermeOrdineAnalyticsSlice";
+// ✅ UI slice
+import uiReducer, {
+  pendingInc,
+  pendingDec,
+} from "@/components/Store/slices/uiSlice";
 
-// ✅ NEW: ui slice
-import uiReducer, { pendingInc, pendingDec } from "@/components/Store/slices/uiSlice";
+// ✅ NEW: sprint timeline feature slice
+import sprintTimelineReducer from "@/components/Store/slices/sprintTimelineSlice";
 
 /**
  * ✅ Middleware globale:
@@ -54,11 +57,11 @@ export const makeStore = () =>
       stats: statsReducer,
       financials: financialsReducer,
 
-      // ✅ NEW
-      confermeOrdineAnalytics: confermeOrdineAnalyticsReducer,
-
-      // ✅ NEW
+      // ✅ UI
       ui: uiReducer,
+
+      // ✅ NEW: feature-specific timeline
+      sprintTimeline: sprintTimelineReducer,
     },
     middleware: (getDefaultMiddleware) =>
       getDefaultMiddleware().concat(loadingMiddleware),

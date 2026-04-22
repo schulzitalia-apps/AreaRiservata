@@ -1,8 +1,5 @@
-// src/app/api/eventi/[type]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/server-utils/lib/auth-guards";
-import { AppRole } from "@/types/roles";
-import { getEventoDef } from "@/config/eventi.registry";
 import {
   listEventi,
   createEvento,
@@ -21,42 +18,37 @@ export async function GET(
   if (!authResult.ok) return authResult.res;
   const { auth } = authResult;
 
-  // permesso di lettura sugli eventi (usando il PermissionKey generico)
   const { type } = await ctx.params;
   if (!hasPermission(auth, "evento.view", { resourceType: type })) {
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
-
 
   const { searchParams } = new URL(req.url);
 
   const query = (searchParams.get("query") || "").trim() || undefined;
   const visibilityRole =
     (searchParams.get("visibilityRole") || "").trim() || undefined;
-
-  const timeFrom =
-    (searchParams.get("timeFrom") || "").trim() || undefined;
-  const timeTo =
-    (searchParams.get("timeTo") || "").trim() || undefined;
-
+  const timeFrom = (searchParams.get("timeFrom") || "").trim() || undefined;
+  const timeTo = (searchParams.get("timeTo") || "").trim() || undefined;
   const anagraficaType =
     (searchParams.get("anagraficaType") || "").trim() || undefined;
   const anagraficaId =
     (searchParams.get("anagraficaId") || "").trim() || undefined;
-
   const gruppoType =
     (searchParams.get("gruppoType") || "").trim() || undefined;
-  const gruppoId =
-    (searchParams.get("gruppoId") || "").trim() || undefined;
+  const gruppoId = (searchParams.get("gruppoId") || "").trim() || undefined;
 
-  // 🔢 paginazione
   const pageRaw = Number(searchParams.get("page") || "1");
-  const page =
-    Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : 1;
+  const page = Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : 1;
 
-  const pageSizeRaw = Number(searchParams.get("pageSize") || "200");
+  const pageSizeRaw = Number(searchParams.get("pageSize") || "100");
   const pageSize =
-    Number.isFinite(pageSizeRaw) && pageSizeRaw > 0 ? pageSizeRaw : 200;
+    Number.isFinite(pageSizeRaw) && pageSizeRaw > 0 ? pageSizeRaw : 100;
+
+  const includeData = searchParams.get("includeData") === "1";
+  const includePartecipanti = searchParams.get("includePartecipanti") === "1";
+  const includeGruppo = searchParams.get("includeGruppo") === "1";
+  const includeAllDay = searchParams.get("includeAllDay") === "1";
 
   const { items, total } = await listEventi({
     type,
@@ -72,7 +64,11 @@ export async function GET(
       gruppoType && gruppoId ? { gruppoType, gruppoId } : undefined,
     page,
     pageSize,
-    auth, // 👈 unico pezzo di contesto che serve alla query
+    includeData,
+    includePartecipanti,
+    includeGruppo,
+    includeAllDay,
+    auth,
   });
 
   return NextResponse.json({ items, total, page, pageSize });
@@ -97,7 +93,6 @@ export async function POST(
 
   const { type } = await ctx.params;
 
-  // permesso di creazione eventi (motore generico)
   if (!hasPermission(auth, "evento.create")) {
     return NextResponse.json(
       { message: "Forbidden" },
@@ -105,7 +100,6 @@ export async function POST(
     );
   }
 
-  // permesso specifico per questo tipo di evento (slug)
   if (!hasPermission(auth, "evento.create", { resourceType: type })) {
     return NextResponse.json(
       { message: "Forbidden" },
@@ -115,29 +109,26 @@ export async function POST(
 
   const body = await req.json();
 
-  // dati dinamici evento (titolo, descrizione, ecc.)
   const data: Record<string, any> = body?.data ?? body?.campi ?? {};
-
-  // core temporale
-  const timeKind = body?.timeKind as any; // TimeKind
+  const timeKind = body?.timeKind as any;
   const startAt = body?.startAt ?? null;
   const endAt = body?.endAt ?? null;
   const allDay = !!body?.allDay;
 
   const recurrence = body?.recurrence
     ? {
-      rrule: body.recurrence.rrule ?? null,
-      until: body.recurrence.until ?? null,
-      count: body.recurrence.count ?? null,
-      masterId: body.recurrence.masterId ?? null,
-    }
+        rrule: body.recurrence.rrule ?? null,
+        until: body.recurrence.until ?? null,
+        count: body.recurrence.count ?? null,
+        masterId: body.recurrence.masterId ?? null,
+      }
     : null;
 
   const gruppo = body?.gruppo
     ? {
-      gruppoType: String(body.gruppo.gruppoType),
-      gruppoId: String(body.gruppo.gruppoId),
-    }
+        gruppoType: String(body.gruppo.gruppoType),
+        gruppoId: String(body.gruppo.gruppoId),
+      }
     : null;
 
   const partecipantiRaw: any[] = body?.partecipanti ?? [];

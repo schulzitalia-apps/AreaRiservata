@@ -7,6 +7,7 @@ import { fetchAnagrafica } from "@/components/Store/slices/anagraficheSlice";
 import { getAnagraficaDef } from "@/config/anagrafiche.registry";
 import {
   isReferenceField,
+  isReferenceMultiField,
   type FieldKey,
   type FieldDef,
 } from "@/config/anagrafiche.fields.catalog";
@@ -22,11 +23,13 @@ import {
 
 import { InfoPill } from "@/components/AtlasModuli/common/InfoPill";
 import { ReferencePill } from "@/components/AtlasModuli/common/ReferencePreviewCell";
+import { StaticGeoMapPanel } from "@/components/AtlasModuli/common/maps/StaticGeoMapPanel";
 
 import {
   useReferenceBatchPreviewMulti,
   type ReferenceBatchEntry,
 } from "@/components/AtlasModuli/common/useReferenceBatchPreview";
+import { formatFieldValue as formatDisplayFieldValue } from "@/components/AtlasModuli/common/FormatFieldValue";
 
 import { useCrudPermissions } from "@/components/AtlasModuli/useCrudPermissions";
 import type { AnagraficaTypeSlug } from "@/config/anagrafiche.types.public";
@@ -87,8 +90,35 @@ type StatsModalState =
   pivot: string | number;
 };
 
+function buildCollectionPreview(count: number, noun = "elementi") {
+  return (
+    <span className="inline-flex rounded-full border border-emerald-400/45 bg-emerald-400/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-300">
+      {count} {noun}
+    </span>
+  );
+}
+
+function buildExpandablePreview(_firstLabel: string, othersCount: number) {
+  return buildCollectionPreview(othersCount + 1);
+}
+
 function normId(x: string) {
   return String(x || "").trim().toLowerCase();
+}
+
+function haversineDistanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const earthRadiusKm = 6371;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
+
+  return 2 * earthRadiusKm * Math.asin(Math.sqrt(h));
 }
 
 async function fetchVariants(type: string): Promise<VariantConfigDTO[]> {
@@ -283,6 +313,79 @@ function renderFormattedValue(args: {
   return String(raw);
 }
 
+function GeoViewerActions({
+  geoPoint,
+}: {
+  geoPoint: { lat: number; lng: number };
+}) {
+  const [distanceLabel, setDistanceLabel] = useState<string | null>(null);
+  const [distanceLoading, setDistanceLoading] = useState(false);
+  const [distanceError, setDistanceError] = useState<string | null>(null);
+
+  const navigationHref = useMemo(
+    () =>
+      `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+        `${geoPoint.lat},${geoPoint.lng}`,
+      )}&travelmode=driving`,
+    [geoPoint],
+  );
+
+  const handleDistance = () => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setDistanceError("Geolocalizzazione non disponibile su questo dispositivo.");
+      return;
+    }
+
+    setDistanceLoading(true);
+    setDistanceError(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const km = haversineDistanceKm(
+          {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          },
+          geoPoint,
+        );
+        setDistanceLabel(km < 1 ? `${Math.round(km * 1000)} m da te` : `${km.toFixed(1)} km da te`);
+        setDistanceLoading(false);
+      },
+      () => {
+        setDistanceError("Impossibile leggere la tua posizione.");
+        setDistanceLoading(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000,
+      },
+    );
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        onClick={handleDistance}
+        className="rounded-full border border-emerald-400/35 bg-emerald-400/[0.08] px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-400/[0.14]"
+      >
+        {distanceLoading ? "Calcolo distanza..." : "Distanza da me"}
+      </button>
+      <a
+        href={navigationHref}
+        target="_blank"
+        rel="noreferrer"
+        className="rounded-full border border-stroke px-4 py-2 text-xs font-semibold text-white hover:bg-white/[0.05] dark:border-dark-3"
+      >
+        Apri navigazione
+      </a>
+      {distanceLabel ? <span className="text-xs text-dark/60 dark:text-white/60">{distanceLabel}</span> : null}
+      {distanceError ? <span className="text-xs text-red-400">{distanceError}</span> : null}
+    </div>
+  );
+}
+
 export default function AnagraficaViewer({
                                            type,
                                            id,
@@ -307,16 +410,6 @@ export default function AnagraficaViewer({
   const [variants, setVariants] = useState<VariantConfigDTO[]>([]);
   const [variantsLoading, setVariantsLoading] = useState(false);
   const [variantsError, setVariantsError] = useState<string | null>(null);
-
-  const [selectedVariantId, setSelectedVariantId] = useState<string>("default");
-
-  // inizializza selector dalla scheda (se presente)
-  useEffect(() => {
-    const v = (selected as any)?.data?.variantId;
-    if (typeof v === "string" && v.trim()) setSelectedVariantId(v.trim());
-    else setSelectedVariantId("default");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [(selected as any)?.id]);
 
   useEffect(() => {
     let alive = true;
@@ -366,36 +459,29 @@ export default function AnagraficaViewer({
 
   const hasDefaultDb = useMemo(() => variantById.has("default"), [variantById]);
 
-  const variantOptions = useMemo(() => {
-    const base = hasDefaultDb
-      ? [{ variantId: "default", label: variantById.get("default")?.label || "Default" }]
-      : [{ variantId: "default", label: "Default" }];
-
-    const rest = variants
-      .filter((v) => normId(v.variantId) !== "default")
-      .map((v) => ({ variantId: v.variantId, label: v.label || v.variantId }));
-
-    const seen = new Set<string>();
-    const out: { variantId: string; label: string }[] = [];
-    for (const o of [...base, ...rest]) {
-      const k = normId(o.variantId);
-      if (!k || seen.has(k)) continue;
-      seen.add(k);
-      out.push(o);
-    }
-    return out;
-  }, [variants, hasDefaultDb, variantById]);
+  const recordVariantId = useMemo(() => {
+    const rawVariant = (selected as any)?.data?.variantId;
+    return typeof rawVariant === "string" && rawVariant.trim() ? rawVariant.trim() : "default";
+  }, [selected]);
 
   const activeVariant = useMemo(() => {
-    const vId = normId(selectedVariantId);
+    const vId = normId(recordVariantId);
     return variantById.get(vId) || null;
-  }, [selectedVariantId, variantById]);
+  }, [recordVariantId, variantById]);
+
+  const activeVariantLabel = useMemo(() => {
+    if (activeVariant?.label?.trim()) return activeVariant.label.trim();
+    if (normId(recordVariantId) === "default") {
+      return hasDefaultDb ? variantById.get("default")?.label || "Default" : "Default";
+    }
+    return recordVariantId;
+  }, [activeVariant, recordVariantId, hasDefaultDb, variantById]);
 
   const visibleKeys = useMemo(() => {
     const allKeys = Object.keys(def.fields || {});
     const allNoVariant = allKeys.filter((k) => normId(k) !== "variantid");
 
-    const vId = normId(selectedVariantId);
+    const vId = normId(recordVariantId);
 
     if (vId === "default" && !hasDefaultDb) {
       return allNoVariant;
@@ -412,7 +498,7 @@ export default function AnagraficaViewer({
 
     const allowed = new Set(allNoVariant);
     return inc.filter((k) => allowed.has(k));
-  }, [def.fields, selectedVariantId, hasDefaultDb, activeVariant]);
+  }, [def.fields, recordVariantId, hasDefaultDb, activeVariant]);
 
   const keys = useMemo(() => visibleKeys as FieldKey[], [visibleKeys]);
 
@@ -423,7 +509,12 @@ export default function AnagraficaViewer({
     return vals.join(" ") || "(senza titolo)";
   }, [def.preview.title, selected]);
 
-  const visibilityLabel = (selected as any)?.visibilityRole || "Solo proprietario";
+  const visibilityRoles = Array.isArray((selected as any)?.visibilityRoles)
+    ? ((selected as any).visibilityRoles as string[]).filter(Boolean)
+    : [];
+  const visibilityLabel = visibilityRoles.length > 0
+    ? visibilityRoles.join(", ")
+    : "Solo proprietario";
 
   const referenceFields = useMemo<[FieldKey, FieldDef & { type: "reference" }][]>(
     () =>
@@ -433,18 +524,39 @@ export default function AnagraficaViewer({
     [def],
   );
 
+  const referenceMultiFields = useMemo<[FieldKey, FieldDef & { type: "referenceMulti" }][]>(
+    () =>
+      Object.entries(def.fields)
+        .filter(([, f]) => isReferenceMultiField(f))
+        .map(([k, f]) => [k as FieldKey, f as FieldDef & { type: "referenceMulti" }]),
+    [def],
+  );
+
   const referenceEntries = useMemo<ReferenceBatchEntry[]>(
     () =>
-      referenceFields.map(([fieldKey, fieldDef]) => {
-        const rawId = ((selected as any)?.data as any)?.[fieldKey];
-        const ids = rawId ? [String(rawId)] : [];
-        return {
-          fieldKey,
-          config: fieldDef.reference!,
-          ids,
-        };
-      }),
-    [referenceFields, selected],
+      [
+        ...referenceFields.map(([fieldKey, fieldDef]) => {
+          const rawId = ((selected as any)?.data as any)?.[fieldKey];
+          const ids = rawId ? [String(rawId)] : [];
+          return {
+            fieldKey,
+            config: fieldDef.reference!,
+            ids,
+          };
+        }),
+        ...referenceMultiFields.map(([fieldKey, fieldDef]) => {
+          const rawIds = ((selected as any)?.data as any)?.[fieldKey];
+          const ids = Array.isArray(rawIds)
+            ? rawIds.map((item: any) => String(item ?? "").trim()).filter(Boolean)
+            : [];
+          return {
+            fieldKey,
+            config: fieldDef.reference!,
+            ids,
+          };
+        }),
+      ],
+    [referenceFields, referenceMultiFields, selected],
   );
 
   const referenceLabelsByField = useReferenceBatchPreviewMulti(referenceEntries);
@@ -486,8 +598,258 @@ export default function AnagraficaViewer({
         return;
       }
 
+      if (isReferenceMultiField(fld)) {
+        const ids = Array.isArray(raw)
+          ? raw.map((item) => String(item ?? "").trim()).filter(Boolean)
+          : [];
+
+        fields.push({
+          id: String(k),
+          label: fld.label,
+          value: ids.length > 0 ? referenceLabelsByField[k]?.[ids[0]] ?? ids[0] : "—",
+          expandablePreview:
+            ids.length > 0
+              ? buildExpandablePreview(String(referenceLabelsByField[k]?.[ids[0]] ?? ids[0]), Math.max(0, ids.length - 1))
+              : undefined,
+          expandedContent:
+            ids.length > 0 ? (
+              <div className="flex flex-wrap justify-center gap-2">
+                {ids.map((refId) => (
+                <ReferencePill
+                  key={`${String(k)}__${refId}`}
+                  targetId={refId}
+                  fieldLabel={String(fld.label)}
+                  config={fld.reference!}
+                  previewLabel={referenceLabelsByField[k]?.[refId] ?? null}
+                />
+                ))}
+              </div>
+            ) : undefined,
+        });
+        return;
+      }
+
+      if (fld.type === "multiselect" && Array.isArray(raw)) {
+        const labels = raw
+          .map((value) => {
+            const opt = fld.options?.find(([optionValue]) => optionValue === String(value));
+            return opt?.[1] ?? String(value ?? "").trim();
+          })
+          .filter(Boolean);
+
+        fields.push({
+          id: String(k),
+          label: fld.label,
+          value: labels.length > 0 ? labels[0] : "—",
+          expandablePreview:
+            labels.length > 0
+              ? buildExpandablePreview(String(labels[0]), Math.max(0, labels.length - 1))
+              : undefined,
+          expandedContent:
+            labels.length > 0 ? (
+              <div className="flex flex-wrap justify-center gap-2">
+                {labels.map((label, index) => (
+                <span
+                  key={`${String(k)}__${label}__${index}`}
+                  className="inline-flex rounded-md border border-stroke bg-gray-2 px-2 py-1 text-[11px] font-medium text-dark dark:border-dark-3 dark:bg-dark-2 dark:text-white"
+                >
+                  {label}
+                </span>
+                ))}
+              </div>
+            ) : undefined,
+        });
+        return;
+      }
+
+      if ((fld.type === "labelArray" || fld.type === "numberArray") && Array.isArray(raw)) {
+        const items = raw
+          .map((value) => String(value ?? "").trim())
+          .filter(Boolean);
+
+        fields.push({
+          id: String(k),
+          label: fld.label,
+          value: items.length > 0 ? items[0] : "—",
+          expandablePreview:
+            items.length > 0
+              ? buildExpandablePreview(String(items[0]), Math.max(0, items.length - 1))
+              : undefined,
+          expandedContent:
+            items.length > 0 ? (
+              <div className="flex flex-wrap justify-center gap-2">
+                {items.map((item, index) => (
+                <span
+                  key={`${String(k)}__${item}__${index}`}
+                  className="inline-flex rounded-md border border-stroke bg-gray-2 px-2 py-1 text-[11px] font-medium text-dark dark:border-dark-3 dark:bg-dark-2 dark:text-white"
+                >
+                  {item}
+                </span>
+                ))}
+              </div>
+            ) : undefined,
+        });
+        return;
+      }
+
+      if (fld.type === "geoPoint" && raw && typeof raw === "object") {
+        const lat = String((raw as any).lat ?? "").trim();
+        const lng = String((raw as any).lng ?? "").trim();
+        fields.push({
+          id: String(k),
+          label: fld.label,
+          value: lat && lng ? `${lat}, ${lng}` : "—",
+        });
+        return;
+      }
+
+      if (fld.type === "geoPointArray" && Array.isArray(raw)) {
+        const points = raw
+          .map((item) => {
+            const lat = String((item as any)?.lat ?? "").trim();
+            const lng = String((item as any)?.lng ?? "").trim();
+            return lat && lng ? `${lat}, ${lng}` : "";
+          })
+          .filter(Boolean);
+
+        fields.push({
+          id: String(k),
+          label: fld.label,
+          value: points.length > 0 ? points[0] : "—",
+          expandablePreview:
+            points.length > 0 ? buildExpandablePreview(points[0], Math.max(0, points.length - 1)) : undefined,
+          expandedContent:
+            points.length > 0 ? (
+              <div className="flex flex-col items-center gap-2">
+                {points.map((point, index) => (
+                  <span
+                    key={`${String(k)}__${point}__${index}`}
+                    className="inline-flex rounded-md border border-stroke bg-gray-2 px-2 py-1 text-[11px] font-medium text-dark dark:border-dark-3 dark:bg-dark-2 dark:text-white"
+                  >
+                    {point}
+                  </span>
+                ))}
+              </div>
+            ) : undefined,
+        });
+        return;
+      }
+
+      if (fld.type === "pairNumber" && raw && typeof raw === "object") {
+        const a = String((raw as any).a ?? "").trim();
+        const b = String((raw as any).b ?? "").trim();
+        fields.push({
+          id: String(k),
+          label: fld.label,
+          value: a && b ? `${a} × ${b}` : "â€”",
+        });
+        return;
+      }
+
+      if (fld.type === "labelValuePairs" && Array.isArray(raw)) {
+        const rows = raw
+          .filter((item) => item && typeof item === "object")
+          .map((item) => ({
+            label: String((item as any).label ?? "").trim(),
+            value: String((item as any).value ?? "").trim(),
+          }))
+          .filter((item) => item.label && item.value);
+
+        fields.push({
+          id: String(k),
+          label: fld.label,
+          value: rows.length > 0 ? `${rows[0].label}: ${rows[0].value}` : "â€”",
+          expandablePreview: rows.length > 0 ? buildCollectionPreview(rows.length) : undefined,
+          expandedContent:
+            rows.length > 0 ? (
+              <div className="flex flex-col items-center gap-2">
+                {rows.map((row, index) => (
+                  <div
+                    key={`${String(k)}__${row.label}__${index}`}
+                    className="w-full rounded-lg border border-stroke/60 bg-white/[0.03] px-3 py-2 text-center dark:border-dark-3/60"
+                  >
+                    <span className="text-dark/60 dark:text-white/60">{row.label}: </span>
+                    <span className="font-medium">{row.value}</span>
+                  </div>
+                ))}
+              </div>
+            ) : undefined,
+        });
+        return;
+      }
+
+      if (fld.type === "keyValueNumber" && Array.isArray(raw)) {
+        const rows = raw
+          .filter((item) => item && typeof item === "object")
+          .map((item) => ({
+            key: String((item as any).key ?? "").trim(),
+            value: (item as any).value,
+          }))
+          .filter((item) => item.key && item.value !== null && item.value !== undefined && item.value !== "");
+
+        fields.push({
+          id: String(k),
+          label: fld.label,
+          value: rows.length > 0 ? `${rows[0].key}: ${rows[0].value}` : "â€”",
+          expandablePreview: rows.length > 0 ? buildCollectionPreview(rows.length) : undefined,
+          expandedContent:
+            rows.length > 0 ? (
+              <div className="flex flex-col items-center gap-2">
+                {rows.map((row, index) => (
+                  <div
+                    key={`${String(k)}__${row.key}__${index}`}
+                    className="w-full rounded-lg border border-stroke/60 bg-white/[0.03] px-3 py-2 text-center dark:border-dark-3/60"
+                  >
+                    <span className="text-dark/60 dark:text-white/60">{row.key}: </span>
+                    <span className="font-medium">{String(row.value)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : undefined,
+        });
+        return;
+      }
+
+      if (fld.type === "address" && raw && typeof raw === "object") {
+        const street = String((raw as any).street ?? "").trim();
+        const city = String((raw as any).city ?? "").trim();
+        const zip = String((raw as any).zip ?? "").trim();
+        const province = String((raw as any).province ?? "").trim();
+        const country = String((raw as any).country ?? "").trim();
+        const extra = String((raw as any).extra ?? "").trim();
+
+        const lines = [
+          street,
+          extra,
+          [zip, city].filter(Boolean).join(" "),
+          [province, country].filter(Boolean).join(" - "),
+        ].filter(Boolean);
+
+        fields.push({
+          id: String(k),
+          label: fld.label,
+          value: lines[0] ?? "â€”",
+          expandablePreview:
+            lines.length > 1 ? buildExpandablePreview(lines[0], lines.length - 1) : undefined,
+          expandedContent:
+            lines.length > 1 ? (
+              <div className="flex flex-col items-center gap-2">
+                {lines.map((line, index) => (
+                  <div
+                    key={`${String(k)}__${index}`}
+                    className="w-full rounded-lg border border-stroke/60 bg-white/[0.03] px-3 py-2 text-center dark:border-dark-3/60"
+                  >
+                    {line}
+                  </div>
+                ))}
+              </div>
+            ) : undefined,
+        });
+        return;
+      }
+
       const ov = overrides?.[String(k)];
-      const valNode = renderFormattedValue({ raw, fieldDef: fld, override: ov });
+      const valNode = formatDisplayFieldValue(raw, fld, ov as any);
 
       // stats: lasciamo come prima (pivot raw)
       const canStats =
@@ -518,6 +880,72 @@ export default function AnagraficaViewer({
     return fields;
   }, [keys, def.fields, selected, referenceLabelsByField, openStatsForField, activeVariant]);
 
+  const topGeoMap = useMemo(() => {
+    let geoPoint: { lat: number; lng: number } | null = null;
+    let sourceLabel: string | null = null;
+
+    for (const key of keys) {
+      const fieldDef = def.fields[key] as FieldDef | undefined;
+      const raw = (selected as any)?.data?.[key];
+
+      if (fieldDef?.type === "geoPoint" && raw && typeof raw === "object") {
+        const lat = Number((raw as any).lat);
+        const lng = Number((raw as any).lng);
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+          geoPoint = { lat, lng };
+          sourceLabel = fieldDef.label;
+          break;
+        }
+      }
+
+      if (!geoPoint && fieldDef?.type === "geoPointArray" && Array.isArray(raw) && raw.length > 0) {
+        const first = raw[0];
+        const lat = Number((first as any)?.lat);
+        const lng = Number((first as any)?.lng);
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+          geoPoint = { lat, lng };
+          sourceLabel = fieldDef.label;
+          break;
+        }
+      }
+    }
+
+    if (!geoPoint) return null;
+
+    const addressFieldKey = keys.find((key) => (def.fields[key] as FieldDef | undefined)?.type === "address");
+    const addressRaw = addressFieldKey ? (selected as any)?.data?.[addressFieldKey] : null;
+    const addressSummary =
+      addressRaw && typeof addressRaw === "object"
+        ? [
+            String((addressRaw as any).street ?? "").trim(),
+            [String((addressRaw as any).zip ?? "").trim(), String((addressRaw as any).city ?? "").trim()].filter(Boolean).join(" "),
+            [String((addressRaw as any).province ?? "").trim(), String((addressRaw as any).country ?? "").trim()].filter(Boolean).join(" - "),
+          ]
+            .filter(Boolean)
+            .join(", ")
+        : "";
+
+    return (
+      <div className="space-y-3">
+        <StaticGeoMapPanel
+          geoPoint={geoPoint}
+          title={sourceLabel ? `Mappa: ${sourceLabel}` : "Mappa"}
+          subtitle={
+            <div className="space-y-1">
+              {addressSummary ? <div>{addressSummary}</div> : null}
+              <div>
+                geoPoint: {geoPoint.lat}, {geoPoint.lng}
+              </div>
+            </div>
+          }
+          emptyMessage="Nessuna mappa disponibile."
+          heightClassName="h-[260px] md:h-[320px]"
+        />
+        <GeoViewerActions geoPoint={geoPoint} />
+      </div>
+    );
+  }, [keys, def.fields, selected]);
+
   const attachmentItems: AttachmentViewItem[] = useMemo(() => {
     return (((selected as any)?.attachments ?? []) as any[]).map((a: any) => ({
       id: a._id,
@@ -547,36 +975,6 @@ export default function AnagraficaViewer({
 
   return (
     <div className="space-y-6">
-      {/* ✅ Selector Varianti */}
-      <div className="rounded-[14px] border border-stroke bg-white p-4 shadow-sm dark:border-dark-3 dark:bg-gray-dark">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <div className="text-sm font-semibold text-dark dark:text-white">Variante</div>
-            <div className="text-xs text-dark/60 dark:text-white/60">
-              Seleziona la visualizzazione (campi + formati) per questa scheda.
-            </div>
-            {variantsError ? (
-              <div className="mt-2 text-xs text-red-600">{variantsError}</div>
-            ) : null}
-          </div>
-
-          <div className="min-w-[260px]">
-            <select
-              className="w-full rounded-md border border-stroke bg-white px-3 py-2 text-sm text-dark outline-none focus:border-primary dark:border-dark-3 dark:bg-dark-2 dark:text-white"
-              value={selectedVariantId}
-              onChange={(e) => setSelectedVariantId(e.target.value)}
-              disabled={variantsLoading}
-            >
-              {variantOptions.map((v) => (
-                <option key={normId(v.variantId)} value={v.variantId}>
-                  {v.label} ({v.variantId})
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </div>
-
       <DetailInfoCard
         title={displayName}
         loading={isLoading}
@@ -586,9 +984,11 @@ export default function AnagraficaViewer({
         pills={
           <>
             <InfoPill tone="success">Tipo: {def.label}</InfoPill>
+            <InfoPill tone="info">Variante: {activeVariantLabel}</InfoPill>
             <InfoPill tone="rose">Visibilità: {visibilityLabel}</InfoPill>
           </>
         }
+        topContent={topGeoMap}
         fields={infoFields}
         coverSrc={coverSrc}
         avatarSrc={avatarSrc}
@@ -597,19 +997,25 @@ export default function AnagraficaViewer({
         hoverEffect={hoverEffect}
         headerActions={
           !isLoading && (
-            <button
-              type="button"
-              onClick={handleOpenCalendarPopup}
-              className="
-                inline-flex items-center gap-2 rounded-full border border-stroke bg-white
-                px-4 py-2 text-xs font-medium text-dark shadow-sm
-                hover:bg-gray-2
-                dark:border-dark-3 dark:bg-dark-2 dark:text-white dark:hover:bg-dark-2/80
-              "
-            >
-              <Icons.Calendar className="h-4 w-4" />
-              <span className="hidden md:inline">Calendario</span>
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={handleOpenCalendarPopup}
+                className="
+                  inline-flex items-center gap-2 rounded-full border border-emerald-400/45 bg-emerald-400/[0.10]
+                  px-4 py-2 text-xs font-semibold text-white shadow-[0_0_26px_rgba(16,185,129,0.16)]
+                  hover:bg-emerald-400/[0.16]
+                  dark:border-emerald-300/45 dark:bg-emerald-300/[0.10] dark:hover:bg-emerald-300/[0.16]
+                "
+              >
+                <Icons.Calendar className="h-4 w-4" />
+                <span className="hidden md:inline">Calendario</span>
+              </button>
+              {variantsLoading ? (
+                <span className="text-xs text-dark/60 dark:text-white/60">Caricamento variante...</span>
+              ) : null}
+              {variantsError ? <span className="text-xs text-red-500">{variantsError}</span> : null}
+            </div>
           )
         }
       />

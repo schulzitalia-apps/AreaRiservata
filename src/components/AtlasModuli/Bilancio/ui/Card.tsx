@@ -5,7 +5,7 @@ export function Card({ className, children }: { className?: string; children: Re
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-2xl bg-white shadow-1 border border-stroke",
+        "relative overflow-hidden md:overflow-visible rounded-2xl bg-white shadow-1 border border-stroke",
         "dark:bg-gray-dark dark:shadow-card dark:border-dark-3",
         "transition",
         "dark:shadow-[0_0_0_1px_rgba(87,80,241,0.10),0_30px_70px_rgba(0,0,0,0.55)]",

@@ -105,6 +105,30 @@ In MongoDB questa forma significa **array contains**.
 
 ---
 
+## 5.1 Importante: `ids[]` (query param) NON Ã¨ ACL
+
+La collection API `GET /api/anagrafiche/:type` supporta anche `ids[]`.
+
+Semantica corretta:
+
+* `ids[]` e' un filtro batch di dominio su `_id`
+* serve a restringere la list a un insieme noto di record
+* non concede visibilita' extra e non sostituisce il filtro ACL
+
+Ordine logico:
+
+1. API permission gate: `hasPermission(auth, "anagrafica.view", { resourceType: type })`
+2. normalizzazione query params, compreso `ids[]`
+3. chiamata a `listAnagrafiche(...)`
+4. composizione finale tra filtro `_id in ids`, filtri di dominio e ACL row-level
+
+Conseguenza:
+
+* un id fuori ACL non viene restituito anche se presente in `ids[]`
+* `ids[]` va letto come ottimizzazione batch, non come "force include"
+
+---
+
 ## 6) Configuratore: `ResourcesConfig` (la fonte dichiarativa)
 
 > File: `src/config/access/access-resources.config.ts`

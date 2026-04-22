@@ -6,6 +6,13 @@ import {
   buildAnagraficaPack,
   type AnagraficaPack,
 } from "@/server-utils/anagrafiche/anagraficaPack";
+import {
+  createRuntimeChatProvider,
+  resolveRuntimeChatSelection,
+  type ChatProviderKind,
+} from "@/server-utils/llm";
+import { ANIMA_PROMPTS_CONFIG } from "@/server-utils/anima/config/anima.prompts.config";
+import type { AnimaLlmTraceStep } from "@/server-utils/anima/core/types";
 
 type ComposeInput = {
   templateKey: string;
@@ -40,7 +47,7 @@ type ComposeOutput = {
   };
 };
 
-const { GROQ_API_KEY, GROQ_MODEL = "llama-3.1-8b-instant", MONGODB_URI } = process.env;
+const { MONGODB_URI } = process.env;
 
 async function ensureDb() {
   if (mongoose.connection.readyState === 1) return;
@@ -63,7 +70,7 @@ function extractFirstJsonObject(text: string): string | null {
   return null;
 }
 
-async function callGroqForDraft(args: {
+async function callLlmForDraft(args: {
   templateKey: string;
   templateSubject: string;
   templateHtml: string;
@@ -71,10 +78,17 @@ async function callGroqForDraft(args: {
   anagraficaPack?: AnagraficaPack | null;
   userGoal?: string;
   language: "it" | "en";
+  provider?: ChatProviderKind | null;
+  model?: string | null;
+  traceCollector?: (step: AnimaLlmTraceStep) => void;
 }) {
-  if (!GROQ_API_KEY) throw new Error("GROQ_API_KEY mancante");
+  const selection = resolveRuntimeChatSelection({
+    provider: args.provider,
+    model: args.model,
+  });
+  const llm = createRuntimeChatProvider(selection.provider);
 
-  const system = `
+  const _legacySystem = `
 Sei un assistente che compone EMAIL aziendali professionali.
 
 Ricevi:
@@ -111,6 +125,9 @@ Campi:
 - html: corpo HTML finale
 - vars: (opzionale) oggetto di variabili utili (anche vuoto), senza dati inventati.
 `.trim();
+  const system = ANIMA_PROMPTS_CONFIG.nodes.mailComposer.buildSystemPrompt({
+    language: args.language,
+  });
 
   const payload = {
     templateKey: args.templateKey,
@@ -123,54 +140,86 @@ Campi:
     userGoal: args.userGoal ?? "",
   };
 
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${GROQ_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: GROQ_MODEL,
-      temperature: 0.2,
+  try {
+    const completion = await llm.chat({
+      model: selection.model,
+      temperature: ANIMA_PROMPTS_CONFIG.nodes.mailComposer.temperature,
       messages: [
         { role: "system", content: system },
         { role: "user", content: JSON.stringify(payload) },
       ],
-    }),
-  });
+    });
+    const raw = completion.content;
 
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    throw new Error(`GROQ_ERROR_${res.status} (model=${GROQ_MODEL}): ${t || "request failed"}`);
+    const jsonStr = extractFirstJsonObject(raw);
+    if (!jsonStr) throw new Error("MAIL_COMPOSER_OUTPUT_NOT_JSON");
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch {
+      throw new Error("MAIL_COMPOSER_OUTPUT_NOT_JSON");
+    }
+
+    const subject = typeof parsed?.subject === "string" ? parsed.subject.trim() : "";
+    const html = typeof parsed?.html === "string" ? parsed.html.trim() : "";
+    if (!subject || !html) throw new Error("MAIL_COMPOSER_OUTPUT_SCHEMA_INVALID");
+
+    const vars =
+      parsed?.vars && typeof parsed.vars === "object" && !Array.isArray(parsed.vars)
+        ? (parsed.vars as Record<string, any>)
+        : {};
+
+    args.traceCollector?.({
+      id: `mail-composer-${Date.now()}`,
+      step: "mailComposer",
+      title: "Mail Composer",
+      reason: "Comporre subject e HTML finali della mail.",
+      provider: selection.provider,
+      model: selection.model,
+      usage: completion.usage ?? null,
+      purpose: "Comporre subject e HTML delle email di Anima.",
+      systemPrompt: system,
+      input: payload,
+      rawResponse: raw,
+      parsedResponse: { subject, html, vars },
+      status: "success",
+      error: null,
+    });
+
+    return { subject, html, vars, provider: selection.provider };
+  } catch (error: any) {
+    args.traceCollector?.({
+      id: `mail-composer-${Date.now()}`,
+      step: "mailComposer",
+      title: "Mail Composer",
+      reason: "Comporre subject e HTML finali della mail.",
+      provider: selection.provider,
+      model: selection.model,
+      usage: null,
+      purpose: "Comporre subject e HTML delle email di Anima.",
+      systemPrompt: system,
+      input: payload,
+      rawResponse: null,
+      status: "failed",
+      error: String(error?.message ?? "MAIL_COMPOSER_FAILED"),
+    });
+    throw error;
   }
-
-  const data: any = await res.json();
-  const raw = String(data?.choices?.[0]?.message?.content ?? "").trim();
-
-  const jsonStr = extractFirstJsonObject(raw);
-  if (!jsonStr) throw new Error("GROQ_OUTPUT_NOT_JSON");
-
-  let parsed: any;
-  try {
-    parsed = JSON.parse(jsonStr);
-  } catch {
-    throw new Error("GROQ_OUTPUT_NOT_JSON");
-  }
-
-  const subject = typeof parsed?.subject === "string" ? parsed.subject.trim() : "";
-  const html = typeof parsed?.html === "string" ? parsed.html.trim() : "";
-  if (!subject || !html) throw new Error("GROQ_OUTPUT_SCHEMA_INVALID");
-
-  const vars =
-    parsed?.vars && typeof parsed.vars === "object" && !Array.isArray(parsed.vars)
-      ? (parsed.vars as Record<string, any>)
-      : {};
-
-  return { subject, html, vars };
 }
 
-export async function composeMailWithGroq(input: ComposeInput): Promise<ComposeOutput> {
+export async function composeMailWithLlm(
+  input: ComposeInput & {
+    provider?: ChatProviderKind | null;
+    model?: string | null;
+    traceCollector?: (step: AnimaLlmTraceStep) => void;
+  }
+): Promise<ComposeOutput & { provider: ChatProviderKind }> {
   await ensureDb();
+  const runtimeSelection = resolveRuntimeChatSelection({
+    provider: input.provider,
+    model: input.model,
+  });
 
   const template = await MailTemplateModel.findOne({
     key: input.templateKey,
@@ -189,7 +238,7 @@ export async function composeMailWithGroq(input: ComposeInput): Promise<ComposeO
 
   // ✅ 1) prova con Groq
   try {
-    const draft = await callGroqForDraft({
+    const draft = await callLlmForDraft({
       templateKey: template.key,
       templateSubject: template.subject,
       templateHtml: template.html,
@@ -197,6 +246,9 @@ export async function composeMailWithGroq(input: ComposeInput): Promise<ComposeO
       anagraficaPack,
       userGoal: input.userGoal,
       language: input.language ?? "it",
+      provider: input.provider,
+      model: input.model,
+      traceCollector: input.traceCollector,
     });
 
     const mergedSuggestionVars = { ...baseVars, ...(draft.vars || {}) };
@@ -218,6 +270,7 @@ export async function composeMailWithGroq(input: ComposeInput): Promise<ComposeO
         subject: draft.subject,
         html: draft.html,
       },
+      provider: draft.provider,
     };
   } catch (e) {
     // ✅ 2) fallback: renderTemplate
@@ -240,6 +293,9 @@ export async function composeMailWithGroq(input: ComposeInput): Promise<ComposeO
         subject: renderedSubject,
         html: renderedHtml,
       },
+      provider: runtimeSelection.provider,
     };
   }
 }
+
+export const composeMailWithGroq = composeMailWithLlm;

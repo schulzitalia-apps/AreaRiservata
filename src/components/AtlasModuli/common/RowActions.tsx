@@ -1,7 +1,7 @@
 // src/components/AtlasModuli/common/RowActions.tsx
 "use client";
 
-import Link from "next/link";
+import { AppButton, AppLinkButton } from "@/components/ui";
 
 interface RowActionsProps {
   viewHref?: string;
@@ -21,7 +21,7 @@ export function RowActions({
                              editHref,
                              deleting,
                              onDelete,
-                             deleteLabel = "Delete",
+                             deleteLabel = "Elimina",
                              canView,
                              canEdit,
                              canDelete,
@@ -43,62 +43,47 @@ export function RowActions({
   const showDelete = (canDelete ?? true) && !!onDelete;
 
   return (
-    <>
+    <div className="flex flex-wrap items-center gap-2">
       {/* VIEW — verde vetroso */}
       {showView && (
-        <Link
+        <AppLinkButton
           href={viewHref!}
-          className={`
-            ${base} ${size} ${motion}
-            border border-emerald-500/60 bg-emerald-500/8 text-emerald-500
-            hover:bg-emerald-500/15 hover:ring-emerald-400/50
-            hover:shadow-[0_0_18px_rgba(16,185,129,0.45)]
-            focus-visible:ring-emerald-400/70
-            dark:border-emerald-400/60 dark:bg-emerald-400/10 dark:text-emerald-300
-            dark:hover:bg-emerald-400/20
-          `}
+          variant="outline"
+          tone="success"
+          size="sm"
+          className="w-full backdrop-blur-sm hover:scale-[1.02] active:scale-100 md:w-auto"
         >
-          View
-        </Link>
+          Apri
+        </AppLinkButton>
       )}
 
       {/* EDIT — blu vetroso */}
       {showEdit && (
-        <Link
+        <AppLinkButton
           href={editHref!}
-          className={`
-            ${base} ${size} ${motion}
-            border border-primary/70 bg-primary/10 text-primary
-            hover:bg-primary/20 hover:ring-primary/50
-            hover:shadow-[0_0_18px_rgba(59,130,246,0.45)]
-            focus-visible:ring-primary/60
-            dark:border-primary/60 dark:bg-primary/20 dark:text-primary-100
-            dark:hover:bg-primary/30
-          `}
+          variant="outline"
+          tone="primary"
+          size="sm"
+          className="w-full backdrop-blur-sm hover:scale-[1.02] active:scale-100 md:w-auto"
         >
-          Edit
-        </Link>
+          Modifica
+        </AppLinkButton>
       )}
 
       {/* DELETE — rosso vetroso */}
       {showDelete && (
-        <button
+        <AppButton
           type="button"
           onClick={onDelete}
-          disabled={deleting}
-          className={`
-            ${base} ${size} ${motion}
-            border border-red-500/70 bg-red-500/10 text-red-400
-            hover:bg-red-500/20 hover:ring-red-400/60
-            hover:shadow-[0_0_18px_rgba(239,68,68,0.5)]
-            focus-visible:ring-red-400/70
-            dark:border-red-400/70 dark:bg-red-400/15 dark:text-red-100
-            dark:hover:bg-red-400/25
-          `}
+          loading={deleting}
+          variant="outline"
+          tone="danger"
+          size="sm"
+          className="w-full backdrop-blur-sm hover:scale-[1.02] active:scale-100 md:w-auto"
         >
           {deleting ? "…" : deleteLabel}
-        </button>
+        </AppButton>
       )}
-    </>
+    </div>
   );
 }

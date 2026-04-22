@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getUserProfile, buildSystemPrompt } from '@/server-utils/anima/botConfig';
+import { ANIMA_COMPONENT_CONFIG } from '@/server-utils/anima/core/anima.config';
 import {
   addMessage,
   getRecentMessages,
@@ -11,6 +12,7 @@ import {
   type ClienteContext,
 } from '@/server-utils/anima/memory';
 import { searchClientiByNomeLike } from '@/server-utils/anima/clientiSearch';
+import { createRuntimeChatProvider } from '@/server-utils/llm';
 
 export const runtime = 'nodejs';
 
@@ -20,16 +22,30 @@ const {
   META_WHATSAPP_TOKEN,
   META_WHATSAPP_PHONE_NUMBER_ID,
   META_WHATSAPP_VERIFY_TOKEN,
-  GROQ_API_KEY,
-  GROQ_MODEL = 'groq/compound',
 } = process.env;
 
 if (!META_WHATSAPP_TOKEN || !META_WHATSAPP_PHONE_NUMBER_ID) {
   console.warn('⚠️ Mancano META_WHATSAPP_TOKEN o META_WHATSAPP_PHONE_NUMBER_ID');
 }
 
-if (!GROQ_API_KEY) {
-  console.warn('⚠️ Manca GROQ_API_KEY');
+function getMetaWhatsappLlm() {
+  return createRuntimeChatProvider(
+    ANIMA_COMPONENT_CONFIG.execution.llmActivatedSteps.legacyMetaWhatsappRouter.provider
+  );
+}
+
+async function runMetaWhatsappChat(args: {
+  model: string;
+  temperature: number;
+  messages: { role: 'system' | 'user' | 'assistant'; content: string }[];
+}) {
+  const llm = getMetaWhatsappLlm();
+  const result = await llm.chat({
+    model: args.model,
+    temperature: args.temperature,
+    messages: args.messages,
+  });
+  return result.content;
 }
 
 /* -------------------------- ROUTER (chat vs search) ------------------------- */
@@ -39,14 +55,14 @@ type BotAction =
   | { action: 'search_cliente'; nome: string };
 
 async function decideActionFromMessage(text: string): Promise<BotAction> {
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${GROQ_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: GROQ_MODEL,
+  const model =
+    ANIMA_COMPONENT_CONFIG.execution.llmActivatedSteps.legacyMetaWhatsappRouter.model ??
+    ANIMA_COMPONENT_CONFIG.llm.providers.groq.model;
+
+  try {
+    const content = await runMetaWhatsappChat({
+      model,
+      temperature: 0,
       messages: [
         {
           role: 'system',
@@ -70,13 +86,7 @@ In tutti gli altri casi usa "chat".
         },
         { role: 'user', content: text },
       ],
-      temperature: 0,
-    }),
-  });
-
-  try {
-    const data: any = await res.json();
-    const content = data?.choices?.[0]?.message?.content ?? '';
+    });
     const parsed = JSON.parse(content);
 
     if (
@@ -90,7 +100,7 @@ In tutti gli altri casi usa "chat".
 
     return { action: 'chat' };
   } catch (e) {
-    console.warn('Router Groq non parsabile, fallback a chat:', e);
+    console.warn('Router legacy Meta non parsabile, fallback a chat:', e);
     return { action: 'chat' };
   }
 }
@@ -318,51 +328,31 @@ Non inventare valori o dettagli mancanti.
             },
           ];
 
-          const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${GROQ_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: GROQ_MODEL,
+          try {
+            reply = await runMetaWhatsappChat({
+              model:
+                ANIMA_COMPONENT_CONFIG.execution.llmActivatedSteps.legacyMetaWhatsappChat.model ??
+                ANIMA_COMPONENT_CONFIG.llm.providers.groq.model,
+              temperature: 0.2,
               messages: [...systemMessages, ...history],
-            }),
-          });
-
-          if (!groqRes.ok) {
-            const errText = await groqRes.text();
-            console.error('Errore Groq:', errText);
+            });
+          } catch (error: any) {
+            console.error('Errore provider legacy Meta:', error?.message || error);
             reply = 'Al momento non riesco a rispondere, riprova più tardi.';
-          } else {
-            const groqData: any = await groqRes.json();
-            reply =
-              groqData?.choices?.[0]?.message?.content?.trim() ||
-              'Al momento non riesco a rispondere, riprova più tardi.';
           }
         }
       } else {
-        const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${GROQ_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: GROQ_MODEL,
+        try {
+          reply = await runMetaWhatsappChat({
+            model:
+              ANIMA_COMPONENT_CONFIG.execution.llmActivatedSteps.legacyMetaWhatsappChat.model ??
+              ANIMA_COMPONENT_CONFIG.llm.providers.groq.model,
+            temperature: 0.2,
             messages: [{ role: 'system', content: systemPrompt }, ...history],
-          }),
-        });
-
-        if (!groqRes.ok) {
-          const errText = await groqRes.text();
-          console.error('Errore Groq:', errText);
+          });
+        } catch (error: any) {
+          console.error('Errore provider legacy Meta:', error?.message || error);
           reply = 'Al momento non riesco a rispondere, riprova più tardi.';
-        } else {
-          const groqData: any = await groqRes.json();
-          reply =
-            groqData?.choices?.[0]?.message?.content?.trim() ||
-            'Al momento non riesco a rispondere, riprova più tardi.';
         }
       }
     }
@@ -412,5 +402,4 @@ async function sendWhatsappMessage(to: string, body: string) {
     console.error('Errore invio messaggio WA Cloud API:', errText);
   }
 }
-
 

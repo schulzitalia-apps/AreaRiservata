@@ -49,6 +49,7 @@ export type SpeseAnalyticsResponse = {
   variantIds: string[];
   months: MonthRow[];
   top: {
+    currentPeriodTop: Record<string, TopExpenseItem[]>;
     paidOrInvoicedRecent: Record<string, TopExpenseItem[]>;
     programmatoRecent: Record<string, TopExpenseItem[]>;
     programmatoTop: Record<string, TopExpenseItem[]>;
@@ -92,6 +93,7 @@ export type RicaviAnalyticsResponse = {
   variantIds: string[];
   months: MonthRow[];
   top: {
+    currentPeriodTop: Record<string, TopRevenueItem[]>;
     paidOrInvoicedRecent: Record<string, TopRevenueItem[]>;
     programmatoRecent: Record<string, TopRevenueItem[]>;
     programmatoTop: Record<string, TopRevenueItem[]>;

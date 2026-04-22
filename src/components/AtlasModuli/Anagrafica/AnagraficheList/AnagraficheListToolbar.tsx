@@ -1,11 +1,10 @@
 // src/components/AtlasModuli/anagrafiche/AnagraficheList/AnagraficheListToolbar.tsx
 "use client";
 
-import Link from "next/link";
 import clsx from "clsx";
 
+import { AppButton, AppLinkButton, AppPagination, AppPanel, AppSelect } from "@/components/ui";
 import { Select } from "@/components/ui/select";
-import { Pagination } from "@/components/AtlasModuli/common/Pagination";
 import { InfoPill } from "@/components/AtlasModuli/common/InfoPill";
 import { GlowButton } from "@/components/AtlasModuli/common/GlowButton";
 
@@ -20,6 +19,7 @@ export function AnagraficheListToolbar({
                                          type,
 
                                          query,
+                                         searching,
                                          docType,
                                          ownerOnly,
 
@@ -32,6 +32,7 @@ export function AnagraficheListToolbar({
                                          pageSize,
 
                                          onQueryChange,
+                                         onSearch,
                                          onDocTypeChange,
                                          onOwnerOnlyChange,
                                          onSortByKey,
@@ -47,6 +48,7 @@ export function AnagraficheListToolbar({
   type: string;
 
   query: string;
+  searching?: boolean;
   docType: string;
   ownerOnly: boolean;
 
@@ -59,6 +61,7 @@ export function AnagraficheListToolbar({
   pageSize: number;
 
   onQueryChange: (v: string) => void;
+  onSearch: () => void;
   onDocTypeChange: (v: string) => void;
   onOwnerOnlyChange: (v: boolean) => void;
   onSortByKey: (k: string) => void;
@@ -74,16 +77,14 @@ export function AnagraficheListToolbar({
   const sortLabel = sortKey ? sortIndex.labelByKey[sortKey] ?? sortKey : "";
   const sortArrow = sortKey ? (sortDir === "asc" ? "↑" : "↓") : "";
 
-  const docTypeOptions: [string, string][] = [
-    ["", "Tutti i tipi"],
-    ...(def.documentTypes ?? []).map((t: string) => [t, t] as [string, string]),
-  ];
+  const docTypeOptions: [string, string][] = (def.documentTypes ?? []).map(
+    (t: string) => [t, t] as [string, string],
+  );
 
   const densityInput = variant === "compact" ? "py-2" : "py-2.5";
 
   return (
-    <div className="rounded-[18px] border border-stroke bg-white/60 p-4 shadow-sm backdrop-blur dark:border-dark-3 dark:bg-gray-dark/40">
-      <div className="space-y-3">
+    <AppPanel className="space-y-3 rounded-[18px]">
         {/* TOP ROW */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
@@ -139,27 +140,27 @@ export function AnagraficheListToolbar({
             {toolbarRight ? <div className="hidden sm:block">{toolbarRight}</div> : null}
 
             {canCreate ? (
-              <Link
+              <AppLinkButton
                 href={`/anagrafiche/${type}/new`}
-                className={clsx(
-                  "inline-flex items-center justify-center rounded-xl border border-stroke bg-white/70 px-4 py-2 text-sm font-semibold text-dark shadow-sm backdrop-blur",
-                  "hover:bg-primary/10 hover:shadow-md",
-                  "dark:border-dark-3 dark:bg-gray-dark/50 dark:text-white dark:hover:bg-dark-2/70",
-                )}
+                variant="outline"
+                tone="neutral"
+                className="font-semibold backdrop-blur-sm"
               >
                 + Nuova scheda
-              </Link>
+              </AppLinkButton>
             ) : null}
           </div>
         </div>
 
         {/* SEARCH */}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative w-full sm:max-w-[560px]">
-            <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-dark/35 dark:text-white/35">
+          <div className="w-full sm:max-w-[700px]">
+            <div className="flex gap-2">
+              <div className="relative min-w-0 flex-1">
+                <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-dark/35 dark:text-white/35">
               ⌕
             </div>
-            <input
+                <input
               className={clsx(
                 "w-full rounded-2xl border border-stroke bg-white/70 pl-10 pr-3 text-sm text-dark shadow-sm backdrop-blur outline-none",
                 "focus:border-primary focus:ring-2 focus:ring-primary/15",
@@ -167,9 +168,27 @@ export function AnagraficheListToolbar({
                 densityInput,
               )}
               placeholder="Cerca…"
-              value={query}
-              onChange={(e) => onQueryChange(e.target.value)}
-            />
+                  value={query}
+                  onChange={(e) => onQueryChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      onSearch();
+                    }
+                  }}
+                />
+              </div>
+
+              <GlowButton
+                color="neutral"
+                size="sm"
+                type="button"
+                className="shrink-0 px-4"
+                onClick={onSearch}
+              >
+                {searching ? "Cerca…" : "Cerca"}
+              </GlowButton>
+            </div>
           </div>
 
           {toolbarRight ? <div className="sm:hidden">{toolbarRight}</div> : null}
@@ -180,7 +199,12 @@ export function AnagraficheListToolbar({
           <div className="flex flex-wrap items-center gap-2">
             {showDocType ? (
               <div className="w-full text-sm sm:w-64">
-                <Select value={docType} onChange={onDocTypeChange} options={docTypeOptions} />
+                <Select
+                  value={docType}
+                  onChange={onDocTypeChange}
+                  options={docTypeOptions}
+                  placeholder="Tutti i tipi"
+                />
               </div>
             ) : null}
 
@@ -203,14 +227,18 @@ export function AnagraficheListToolbar({
 
             {showSortDropdown ? (
               <div className="w-full text-sm sm:w-64">
-                <Select value={sortKey} onChange={onSortByKey} options={sortIndex.options} />
+                <AppSelect
+                  value={sortKey}
+                  onChange={onSortByKey}
+                  options={sortIndex.options.map(([value, label]) => ({ value, label }))}
+                />
               </div>
             ) : null}
           </div>
 
           {totalPages > 1 ? (
             <div className="rounded-2xl bg-white/60 p-1.5 shadow-sm backdrop-blur dark:bg-gray-dark/40">
-              <Pagination
+              <AppPagination
                 page={page}
                 totalPages={totalPages}
                 totalItems={total}
@@ -222,16 +250,16 @@ export function AnagraficheListToolbar({
         </div>
 
         <div className="flex items-center justify-between sm:hidden">
-          <GlowButton
-            color="neutral"
+          <AppButton
+            variant="outline"
+            tone="neutral"
             size="sm"
-            className="px-3 py-2 text-[11px]"
+            className="backdrop-blur-sm"
             onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
           >
             ↑ Torna su
-          </GlowButton>
+          </AppButton>
         </div>
-      </div>
-    </div>
+    </AppPanel>
   );
 }

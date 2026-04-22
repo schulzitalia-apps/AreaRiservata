@@ -10,6 +10,8 @@ export interface DetailField {
   label: ReactNode;
   value: ReactNode;
   className?: string;
+  expandablePreview?: ReactNode;
+  expandedContent?: ReactNode;
 
   /** ✅ opzionale: rende il campo cliccabile */
   onClick?: () => void;
@@ -38,6 +40,7 @@ interface DetailInfoCardProps {
   avatarSrc?: string;
 
   headerActions?: ReactNode;
+  topContent?: ReactNode;
 
   headerVariant?: DetailCardHeaderVariant;
   avatarSize?: DetailCardAvatarSize;
@@ -130,6 +133,7 @@ export function DetailInfoCard({
                                  coverSrc = "/images/cover/cover-04.png",
                                  avatarSrc = "/images/user/user-02.png",
                                  headerActions,
+                                 topContent,
                                  headerVariant = "cover-avatar",
                                  avatarSize = "medium",
                                  hoverEffect = true,
@@ -181,6 +185,8 @@ export function DetailInfoCard({
         )}
       </div>
 
+      {topContent ? <div className="mb-4">{topContent}</div> : null}
+
       {loading ? (
         <div className="space-y-2">
           {Array.from({ length: skeletonRows }).map((_, i) => (
@@ -198,9 +204,29 @@ export function DetailInfoCard({
 
             const preserveNewlines = l.isLong && Boolean(l.valueText && l.valueText.includes("\n"));
 
-            const clickable = !!(f.clickable && f.onClick);
+            const hasExpandableContent = !!f.expandedContent;
+            const clickable = !!(f.clickable && f.onClick) && !hasExpandableContent;
+            const fieldValue = hasExpandableContent ? f.expandablePreview ?? f.value : f.value;
+            const baseClassName = clsx(
+              "rounded-xl border border-stroke text-dark dark:border-dark-3 dark:text-white",
+              "bg-white/[0.03] dark:bg-white/[0.02]",
+              "px-3 py-2 md:px-4 md:py-3",
+              hasExpandableContent || l.isLong ? "h-auto min-h-[64px] md:min-h-[72px]" : "h-[64px] md:h-[72px]",
+              "transition-all duration-200",
+              "hover:border-emerald-400/95 dark:hover:border-emerald-300/95",
+              "hover:bg-emerald-500/[0.10] dark:hover:bg-emerald-400/[0.12]",
+              "hover:-translate-y-[1px]",
+              "hover:shadow-[0_0_0_1px_rgba(16,185,129,0.75),0_0_44px_rgba(16,185,129,0.28)]",
+              "focus-within:border-emerald-400 dark:focus-within:border-emerald-300",
+              "focus-within:shadow-[0_0_0_1px_rgba(16,185,129,0.85),0_0_52px_rgba(16,185,129,0.34)]",
+              l.shouldSpanTwo ? "md:col-span-2" : undefined,
+              isSolitary ? "md:col-span-2 md:w-1/2 md:mx-auto w-full" : undefined,
+              clickable && "cursor-pointer select-none",
+              hasExpandableContent && "group",
+              f.className,
+            );
 
-            return (
+            const body = (
               <div
                 key={f.id}
                 role={clickable ? "button" : undefined}
@@ -213,27 +239,9 @@ export function DetailInfoCard({
                     }
                     : undefined
                 }
-                className={clsx(
-                  "rounded-lg border border-stroke text-dark dark:border-dark-3 dark:text-white",
-                  "px-3 py-2 md:px-4 md:py-2.5",
-
-                  l.isLong ? "h-auto min-h-[64px] md:min-h-[72px]" : "h-[64px] md:h-[72px]",
-
-                  "transition-all duration-200",
-                  "hover:border-emerald-400/95 dark:hover:border-emerald-300/95",
-                  "hover:bg-emerald-500/[0.10] dark:hover:bg-emerald-400/[0.12]",
-                  "hover:shadow-[0_0_0_1px_rgba(16,185,129,0.75),0_0_44px_rgba(16,185,129,0.42)]",
-                  "focus-within:border-emerald-400 dark:focus-within:border-emerald-300",
-                  "focus-within:shadow-[0_0_0_1px_rgba(16,185,129,0.85),0_0_52px_rgba(16,185,129,0.48)]",
-
-                  l.shouldSpanTwo ? "md:col-span-2" : undefined,
-                  isSolitary ? "md:col-span-2 md:w-1/2 md:mx-auto w-full" : undefined,
-
-                  clickable && "cursor-pointer select-none",
-                  f.className,
-                )}
+                className={baseClassName}
               >
-                <div className={clsx("grid h-full place-items-center", l.isLong && "py-2")}>
+                <div className={clsx("grid h-full place-items-center", (l.isLong || hasExpandableContent) && "py-2")}>
                   <div className="w-full max-w-[92%] overflow-hidden">
                     {l.canInline ? (
                       <div className="flex items-center justify-center gap-3 leading-none">
@@ -256,7 +264,7 @@ export function DetailInfoCard({
                             l.isOneLine ? "font-semibold drop-shadow-[0_0_14px_rgba(16,185,129,0.34)]" : "font-medium",
                           )}
                         >
-                          {f.value}
+                          {fieldValue}
                         </div>
                       </div>
                     ) : (
@@ -277,13 +285,46 @@ export function DetailInfoCard({
                             "[font-size:clamp(12px,3.6vw,14px)] md:text-sm",
                           )}
                         >
-                          {f.value}
+                          {fieldValue}
                         </div>
                       </div>
                     )}
                   </div>
                 </div>
               </div>
+            );
+
+            if (!hasExpandableContent) return body;
+
+            return (
+              <details key={f.id} className={baseClassName}>
+                <summary className="list-none cursor-pointer">
+                  <div className="flex h-full items-center justify-center py-2">
+                    <div className="flex w-full max-w-[92%] flex-col items-center gap-3 overflow-hidden text-center">
+                      <div
+                        className={clsx(
+                          "break-words text-dark/60 dark:text-white/60",
+                          "line-clamp-2 [font-size:clamp(10px,3vw,12px)] md:text-xs",
+                        )}
+                      >
+                        {f.label}
+                      </div>
+
+                      <div className="flex items-center justify-center gap-3">
+                        <div className="min-w-0">{fieldValue}</div>
+                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-emerald-400/35 bg-emerald-400/10 text-base font-semibold text-emerald-300">
+                          <span className="group-open:hidden">+</span>
+                          <span className="hidden group-open:inline">−</span>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </summary>
+
+                <div className="mt-2 border-t border-stroke/50 px-1 pt-3 dark:border-dark-3/50">
+                  {f.expandedContent}
+                </div>
+              </details>
             );
           })}
         </div>

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { InviteResult, Notice } from "../types";
 import RoleSelect from "../ui/RoleSelect";
 import { apiCreateInvite } from "../api";
+import BulkUserInviteWizard from "../modals/BulkUserInviteWizard";
 import { ROLES, type AppRole } from "@/types/roles";
 
 export default function InviteCreateBox({
@@ -121,6 +122,8 @@ export default function InviteCreateBox({
           >
             Genera e invia mail
           </button>
+
+          <BulkUserInviteWizard onNotice={onNotice} onAfterBulk={onAfterInvite} />
         </div>
 
         {invite && (

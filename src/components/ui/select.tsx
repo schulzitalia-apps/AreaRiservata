@@ -28,6 +28,13 @@ type SelectProps = {
   viewportPadding?: number;
   menuGap?: number;
   defaultMaxHeight?: number;
+  wrapperClassName?: string;
+  triggerClassName?: string;
+  menuClassName?: string;
+  optionClassName?: string;
+  selectedOptionClassName?: string;
+  emptyClassName?: string;
+  caretClassName?: string;
 };
 
 function normalizeOptions(options: SelectProps["options"]): ObjectOption[] {
@@ -61,6 +68,13 @@ export function Select({
                          viewportPadding = 8,
                          menuGap = 8,
                          defaultMaxHeight = 220,
+                         wrapperClassName,
+                         triggerClassName,
+                         menuClassName,
+                         optionClassName,
+                         selectedOptionClassName,
+                         emptyClassName,
+                         caretClassName,
                        }: SelectProps) {
   const itemsRaw = useMemo(() => normalizeOptions(options), [options]);
 
@@ -264,7 +278,7 @@ export function Select({
   };
 
   const field = (
-    <div className="relative">
+    <div className={cn("relative", wrapperClassName)}>
       {/* TRIGGER */}
       <button
         ref={triggerRef}
@@ -280,6 +294,7 @@ export function Select({
           "dark:border-dark-3 dark:bg-transparent dark:text-white dark:hover:bg-dark-2",
           disabled &&
           "cursor-not-allowed opacity-65 hover:bg-transparent dark:hover:bg-transparent",
+          triggerClassName,
         )}
       >
         <span className={cn("truncate", value === "" && "text-gray-6 dark:text-dark-5")}>
@@ -301,6 +316,7 @@ export function Select({
               "rounded-lg border shadow-card-3",
               "bg-white text-dark border-stroke",
               "dark:bg-dark-2 dark:text-dark-6 dark:border-dark-3",
+              menuClassName,
             )}
           >
             <ul className="py-1 text-sm overflow-y-auto" style={{ maxHeight }}>
@@ -326,6 +342,8 @@ export function Select({
                         // highlight selezionata (tema)
                         isSelected &&
                         "font-semibold bg-primary/10 text-primary ring-1 ring-primary/30 hover:bg-primary/10 dark:bg-primary/20 dark:text-primary dark:ring-primary/40",
+                        optionClassName,
+                        isSelected && selectedOptionClassName,
                       )}
                     >
                       <span className="truncate">{opt.label}</span>
@@ -335,7 +353,12 @@ export function Select({
               })}
 
               {items.length === 0 && (
-                <li className="px-3 py-1.5 text-sm text-gray-6 dark:text-dark-5">
+                <li
+                  className={cn(
+                    "px-3 py-1.5 text-sm text-gray-6 dark:text-dark-5",
+                    emptyClassName,
+                  )}
+                >
                   Nessuna opzione disponibile
                 </li>
               )}
