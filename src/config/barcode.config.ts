@@ -110,6 +110,12 @@ export const BARCODE_ACTIONS_CONFIG = [
       setValue: "Spedizione",
     },
   },
+  {
+    id: "avvisi_accessori",
+    label: "Avvisi Accessori",
+    description: "Opzione evento avvisi_accessori disponibile nel lettore barcode.",
+    action: { kind: "read_only" },
+  },
 ] as const satisfies readonly BarcodeActionConfig[];
 
 export type BarcodeActionId = (typeof BARCODE_ACTIONS_CONFIG)[number]["id"];
