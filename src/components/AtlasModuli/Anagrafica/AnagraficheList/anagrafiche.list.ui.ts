@@ -33,11 +33,11 @@ export const ANAGRAFICHE_LIST_UI_BY_SLUG: Partial<
   "conferme-ordine": {
     variant: "comfortable",
     main: {
-      title: fk("codiceCliente"),
-      subtitle: fk("riferimento"),
+      title: fk("riferimento"),
+      subtitle: fk(),
       showOwner: false,
       showDate: false,
-      referencePills: false,
+      referencePills: fk("codiceCliente"),
     },
     columns: {
       mode: "custom",
