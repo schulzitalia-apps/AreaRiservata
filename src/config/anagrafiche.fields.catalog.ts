@@ -1910,15 +1910,16 @@ export const FIELD_CATALOG = {
 /* ------------------------------ TYPE GUARDS ------------------------------ */
 
 export function isReferenceField(
-  def: FieldDef,
+  def: FieldDef | null | undefined,
 ): def is FieldDef & { type: "reference"; reference: ReferenceConfig } {
-  return def.type === "reference" && !!def.reference;
+  return !!def && def.type === "reference" && !!def.reference;
 }
 
 export function isReferenceMultiField(
-  def: FieldDef,
+  def: FieldDef | null | undefined,
 ): def is FieldDef & { type: "referenceMulti"; reference: ReferenceConfig } {
-  return def.type === "referenceMulti" && !!def.reference;
+  return !!def && def.type === "referenceMulti" && !!def.reference;
 }
+
 
 export type FieldKey = keyof typeof FIELD_CATALOG;
