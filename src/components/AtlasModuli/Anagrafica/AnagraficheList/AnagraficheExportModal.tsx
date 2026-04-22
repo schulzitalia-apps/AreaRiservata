@@ -583,7 +583,7 @@ export function AnagraficheExportModal({
       <div className="max-h-[70vh] space-y-6 overflow-y-auto pr-1">
         {activeBaseFilters.length ? (
           <div className="rounded-2xl border border-stroke bg-gray-1/70 p-4 text-sm text-dark/75 dark:border-dark-3 dark:bg-dark-2/40 dark:text-white/75">
-            L'export parte gia' dalla list corrente: {activeBaseFilters.join(" / ")}
+            L&apos;export parte gia&apos; dalla list corrente: {activeBaseFilters.join(" / ")}
           </div>
         ) : null}
 
@@ -602,7 +602,7 @@ export function AnagraficheExportModal({
           />
 
           <div className="rounded-2xl border border-stroke bg-white/60 p-4 text-sm text-dark/70 dark:border-dark-3 dark:bg-gray-dark/40 dark:text-white/70">
-            L'ordinamento per data e i filtri data/select vengono applicati localmente all'insieme restituito dalle API list e reference.
+            L&apos;ordinamento per data e i filtri data/select vengono applicati localmente all&apos;insieme restituito dalle API list e reference.
           </div>
         </div>
 
@@ -676,7 +676,7 @@ export function AnagraficheExportModal({
             <div>
               <h3 className="text-base font-semibold text-dark dark:text-white">Date</h3>
               <p className="text-sm text-dark/60 dark:text-white/60">
-                Puoi limitare l'export a un intervallo e, se vuoi, ordinare il file in base a una data configurata.
+                Puoi limitare l&apos;export a un intervallo e, se vuoi, ordinare il file in base a una data configurata.
               </p>
             </div>
 
@@ -758,7 +758,7 @@ export function AnagraficheExportModal({
             hint="Questo tipo di anagrafica non espone campi date/select nel catalogo corrente."
           >
             <div className="rounded-2xl border border-stroke bg-white/60 px-4 py-3 text-sm text-dark/65 dark:border-dark-3 dark:bg-gray-dark/40 dark:text-white/65">
-              L'export resta disponibile sui campi scelti, ma senza filtri aggiuntivi configurati.
+              L&apos;export resta disponibile sui campi scelti, ma senza filtri aggiuntivi configurati.
             </div>
           </AppField>
         ) : null}

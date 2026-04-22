@@ -177,7 +177,7 @@ export const inviteEmailTemplateConfig: InviteEmailTemplateConfig = {
             </p>
 
             <p style="margin: 0 0 24px; font-size: 15px; line-height: 1.8; color: #374151;">
-              Abbiamo preparato anche una breve guida illustrata che ti accompagnerà passo-passo nell’utilizzo della piattaforma.
+              Abbiamo preparato anche una breve guida illustrata che ti accompagnerà passo-passo nell’utilizzo della piattaforma. La troverai nella sezione documenti della nuova Area Riservata.
             </p>
 
             <div style="margin: 28px 0; padding: 24px; background-color: #111827; border-radius: 18px; text-align: center;">
