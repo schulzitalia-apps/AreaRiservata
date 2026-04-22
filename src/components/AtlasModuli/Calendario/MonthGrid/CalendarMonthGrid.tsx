@@ -66,6 +66,14 @@ const isSameYMD = (a: Date, b: Date) =>
 
 const cmpISO = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
+function formatPopoverDayLabel(isoDay: string) {
+  return new Date(`${isoDay}T00:00:00`).toLocaleDateString(undefined, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+}
+
 function segmentKindForDay(isoDay: string, ev: CalendarEventVM) {
   const s = new Date(ev.start);
   const e = new Date(ev.end);
@@ -96,7 +104,7 @@ function MoreEventsPopover({
                              isoDay,
                              events,
                              label,
-                             maxWidth = "min(24rem, calc(100vw - 1.5rem))",
+                             maxWidth = "min(28rem, calc(100vw - 2rem))",
                              getEventColor,
                              onEventMenu,
                            }: {
@@ -109,18 +117,10 @@ function MoreEventsPopover({
 }) {
   const anchorRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  const closeTimer = useRef<number | null>(null);
+  const dayLabel = useMemo(() => formatPopoverDayLabel(isoDay), [isoDay]);
 
-  const openNow = () => {
-    if (closeTimer.current) window.clearTimeout(closeTimer.current);
-    closeTimer.current = null;
-    setOpen(true);
-  };
-
-  const closeSoon = () => {
-    if (closeTimer.current) window.clearTimeout(closeTimer.current);
-    closeTimer.current = window.setTimeout(() => setOpen(false), 120);
-  };
+  const openNow = () => setOpen(true);
+  const closeNow = () => setOpen(false);
 
   const toggle = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -128,16 +128,24 @@ function MoreEventsPopover({
     setOpen((v) => !v);
   };
 
+  useEffect(() => {
+    if (!open) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
   return (
-    <div
-      ref={anchorRef}
-      className="relative"
-      // desktop: hover
-      onMouseEnter={openNow}
-      onMouseLeave={closeSoon}
-    >
+    <div ref={anchorRef} className="relative">
       <div
-        onClick={toggle} // mobile: tap
+        onClick={toggle}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -150,59 +158,87 @@ function MoreEventsPopover({
       <FloatingPortal
         open={open}
         anchorRef={anchorRef as any}
-        placement="bottom"
-        offset={10}
-        shift={10}
-        onMouseEnter={openNow}
-        onMouseLeave={closeSoon}
+        placement="right"
+        offset={14}
+        shift={16}
       >
         {({ placement: finalPlacement }) => (
-          <Popover placement={finalPlacement} maxWidth={maxWidth} withConnector>
-            <div className="w-[min(24rem,calc(100vw-1.5rem))] p-2">
-              <div className="sticky top-0 z-[1] mb-2 flex items-center justify-between gap-3 rounded-xl bg-white/95 px-1 py-1 text-[11px] font-semibold text-gray-7 backdrop-blur dark:bg-gray-900/95 dark:text-white/80">
-                <span>Altri appuntamenti</span>
-                <span className="shrink-0 rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-white/10 dark:text-white/70">
-                  {events.length}
-                </span>
+          <Popover
+            placement={finalPlacement}
+            maxWidth={maxWidth}
+            withConnector
+            className="overflow-hidden p-0"
+          >
+            <div className="w-[min(28rem,calc(100vw-2rem))]">
+              <div className="border-b border-white/10 bg-slate-950/90 px-4 py-3 text-white">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold leading-tight">Altri appuntamenti</div>
+                    <div className="mt-1 text-xs text-white/60">{dayLabel}</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-white/75">
+                      {events.length}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Chiudi elenco eventi"
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/70 transition hover:bg-white/10 hover:text-white"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        closeNow();
+                      }}
+                    >
+                      <span className="text-sm leading-none">×</span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              <ul className="max-h-[min(26rem,calc(100vh-8rem))] space-y-1 overflow-y-auto overscroll-contain pr-1">
-                {events.map((ev, i) => {
-                  const { isStart, isEnd, isMiddle } = segmentKindForDay(isoDay, ev);
-                  const scheme = getEventColor(ev);
+              <div className="max-h-[min(32rem,calc(100vh-7rem))] overflow-y-auto overscroll-contain px-3 py-3">
+                <ul className="space-y-2">
+                  {events.map((ev, i) => {
+                    const { isStart, isEnd, isMiddle } = segmentKindForDay(isoDay, ev);
+                    const scheme = getEventColor(ev);
 
-                  return (
-                    <li key={`${ev.id}-more-${i}`}>
-                      <EventLabelHover event={ev} placement="right" maxWidth="22rem">
-                        <button
-                          type="button"
-                          className={cn(
-                            "w-full text-left truncate rounded-md border px-2 py-1.5 text-xs transition",
-                            isMiddle ? scheme.pillMiddle : scheme.pillSolid,
-                            !isStart && "rounded-l-none",
-                            !isEnd && "rounded-r-none",
-                            "hover:opacity-95",
-                          )}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            onEventMenu?.(e, isoDay, ev);
-                            setOpen(false);
-                          }}
-                          onContextMenu={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            onEventMenu?.(e, isoDay, ev);
-                            setOpen(false);
-                          }}
-                        >
-                          {ev.title}
-                        </button>
-                      </EventLabelHover>
-                    </li>
-                  );
-                })}
-              </ul>
+                    return (
+                      <li key={`${ev.id}-more-${i}`}>
+                        <EventLabelHover event={ev} placement="right" maxWidth="22rem">
+                          <button
+                            type="button"
+                            className={cn(
+                              "w-full rounded-xl border px-3 py-2 text-left text-sm leading-snug transition",
+                              "shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] hover:scale-[0.995] hover:opacity-95",
+                              isMiddle ? scheme.pillMiddle : scheme.pillSolid,
+                              !isStart && "rounded-l-md",
+                              !isEnd && "rounded-r-md",
+                            )}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              onEventMenu?.(e, isoDay, ev);
+                              closeNow();
+                            }}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              onEventMenu?.(e, isoDay, ev);
+                              closeNow();
+                            }}
+                          >
+                            <span className="line-clamp-2 break-words">{ev.title}</span>
+                          </button>
+                        </EventLabelHover>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+
+              <div className="border-t border-black/10 bg-black/5 px-4 py-2 text-[11px] text-gray-600 dark:border-white/10 dark:bg-white/5 dark:text-white/55">
+                Seleziona un evento per aprire il menu rapido. Premi `Esc` per chiudere.
+              </div>
             </div>
           </Popover>
         )}
@@ -215,7 +251,7 @@ function MoreEventsPopover({
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            setOpen(false);
+            closeNow();
           }}
         />
       )}
