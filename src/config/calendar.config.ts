@@ -11,7 +11,7 @@ export type CalendarConfig = {
 
 export const CALENDAR_CONFIG: CalendarConfig = {
   // metti qui gli slug nell'ordine che vuoi per filtri + colori
-  colorOrder: [ "eventi", "avvisi_ferramenta", "avvisi_taglio", "avvisi_vetraggio", "avvisi_pronto", "consegna_prevista", "avvisi_speciale"],
+  colorOrder: [ "eventi", "avvisi_ferramenta", "avvisi_taglio", "avvisi_vetraggio", "avvisi_pronto", "consegna_prevista", "avvisi_speciale", "avvisi_accessori"],
 
   features: {
     selectionMode: false,
