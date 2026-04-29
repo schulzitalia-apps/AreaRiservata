@@ -282,7 +282,7 @@ export const NavItemsAccess: NavItemAccess[] = [
     label: "Eventi", // per layout "group", titolo voce padre
     layout: "group",
     roles: ["Super"],
-    includeSlugs: ["eventi", "avvisi_taglio", "avvisi_ferramenta", "avvisi_vetraggio", "avvisi_pronto", "consegna_prevista"],
+    includeSlugs: ["eventi", "avvisi_taglio", "avvisi_ferramenta", "avvisi_vetraggio", "avvisi_accessori", "avvisi_pronto", "consegna_prevista"],
   },
 
   {

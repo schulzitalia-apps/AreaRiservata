@@ -224,6 +224,54 @@ export const ANAGRAFICHE_ACTIONS: readonly PublicAnagraficaActionDef[] = [
    *
    *  (mappato su eventType = "avvisi_pronto" / "Pronto a Magazzino")
    * ------------------------------------------------------------------ */
+  /* ------------------------------------------------------------------
+   *  CAMBIO STATO COMMESSA: ACCESSORI
+   * ------------------------------------------------------------------ */
+  {
+    scope: "ANAGRAFICA",
+
+    id: "conferme-ordine__stato_accessori",
+    label: "Cambio stato commessa: Accessori",
+    description:
+      "Crea un avviso quando la commessa entra in stato Accessori.",
+
+    anagraficaType: "conferme-ordine",
+    field: "statoAvanzamento",
+    trigger: "ON_CHANGE",
+
+    eventType: "avvisi_accessori",
+    timeKind: "point",
+    visibility: "SEMPRE",
+
+    timeSource: "now",
+
+    uiTone: "info",
+
+    titleTemplate:
+      "Commessa {{anagrafica.numeroOrdine}} - stato: {{anagrafica.statoAvanzamento}}",
+    descriptionTemplate:
+      "Gentile cliente,\n" +
+      "lo stato di avanzamento della commessa {{anagrafica.numeroOrdine}} è passato a: {{anagrafica.statoAvanzamento}}.",
+
+    prefillEventoData: {
+      stato: "programmato",
+      priorita: "medium",
+      tipoAvviso: "accessori",
+    },
+
+    partecipantiStrategy: "ANAGRAFICA_PRINCIPALE",
+
+    condition: cond.eqString(
+      cond.path("anagrafica.statoAvanzamento"),
+      "Accessori",
+    ),
+  },
+
+  /* ------------------------------------------------------------------
+   *  CAMBIO STATO COMMESSA â†’ IMBALLAGGIO
+   *
+   *  (mappato su eventType = "avvisi_pronto" / "Pronto a Magazzino")
+   * ------------------------------------------------------------------ */
   {
     scope: "ANAGRAFICA",
 

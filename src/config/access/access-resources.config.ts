@@ -274,6 +274,22 @@ export const ResourcesConfig: ResourcesConfigMap = {
       },
     },
 
+    avvisi_accessori: {
+      label: "Accessori",
+      actions: {
+        view: { roles: ["Super",
+            "Amministrazione",
+            "Commerciale",
+            "Tecnico",
+            "Custcare",
+            "Agente",
+            "Cliente",] },
+        create: { roles: ["Super", "Amministrazione", "Tecnico"] },
+        edit: { roles: ["Super", "Amministrazione"] },
+        delete: { roles: ["Super"] },
+      },
+    },
+
     avvisi_pronto: {
       label: "Pronto a Magazzino",
       actions: {

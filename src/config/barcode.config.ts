@@ -111,16 +111,30 @@ export const BARCODE_ACTIONS_CONFIG = [
     },
   },
   {
-    id: "avvisi_accessori",
-    label: "Avvisi Accessori",
-    description: "Opzione evento avvisi_accessori disponibile nel lettore barcode.",
-    action: { kind: "read_only" },
+    id: "Accessori",
+    label: "Accessori",
+    description: "Imposta lo stato avanzamento a Accessori sulla conferma d'ordine trovata.",
+    action: {
+      kind: "anagrafica_update",
+      targetType: "conferme-ordine",
+      matchField: "numeroOrdine",
+      extractedFromBarcode: { kind: "slice", start: 0, len: 5 },
+      setField: "statoAvanzamento",
+      setValue: "Accessori",
+    },
   },
 ] as const satisfies readonly BarcodeActionConfig[];
 
 export type BarcodeActionId = (typeof BARCODE_ACTIONS_CONFIG)[number]["id"];
 
 export function getBarcodeActionConfig(id: BarcodeActionId | string): BarcodeActionConfig | null {
+  if (id === "avvisi_accessori") {
+    return (
+      (BARCODE_ACTIONS_CONFIG as readonly BarcodeActionConfig[]).find(
+        (a) => a.id === "Accessori",
+      ) ?? null
+    );
+  }
   return (BARCODE_ACTIONS_CONFIG as readonly BarcodeActionConfig[]).find((a) => a.id === id) ?? null;
 }
 
