@@ -14,8 +14,21 @@ import {
 
 const ANAGRAFICA_SLUG = "conferme-ordine";
 
-const STATO_VALUES = ["Taglio", "Ferramenta", "Vetraggio", "Imballaggio", "Spedizione"] as const;
+const STATO_VALUES = ["Taglio", "Ferramenta", "Vetraggio", "Accessori", "Imballaggio", "Spedizione"] as const;
 type StatoAvanzamento = (typeof STATO_VALUES)[number];
+
+function resolveForcedStatoAvanzamento(actionId: string | null): StatoAvanzamento | null {
+  const normalized = String(actionId ?? "").trim();
+  if (!normalized) return null;
+
+  if (normalized === "avvisi_accessori") {
+    return "Accessori";
+  }
+
+  return STATO_VALUES.includes(normalized as StatoAvanzamento)
+    ? (normalized as StatoAvanzamento)
+    : null;
+}
 
 function extractNumeroOrdine(barcodeRaw: string): string {
   const raw = (barcodeRaw || "").trim();
@@ -203,9 +216,7 @@ const BarcodeScannerButton: React.FC = () => {
       // 1) actionId dell'utente loggato (forzato)
       // 2) selectedStatus (manuale) (rimane come fallback se mai in futuro lo riabiliti)
       // 3) ciclo automatico
-      const forcedNext = STATO_VALUES.includes(userActionId as any)
-        ? (userActionId as StatoAvanzamento)
-        : null;
+      const forcedNext = resolveForcedStatoAvanzamento(userActionId);
 
       if (!forcedNext) {
         throw new Error(`actionId profilo non mappato a StatoAvanzamento: ${userActionId}`);
