@@ -56,15 +56,23 @@ function isPrimitive(value: unknown): value is Primitive {
   return value == null || ["string", "number", "boolean"].includes(typeof value);
 }
 
-function isNonEmptyPrimitive(value: Primitive) {
+function isNonEmptyPrimitive(
+  value: Primitive,
+): value is Exclude<Primitive, null | undefined> {
   if (value == null) return false;
   if (typeof value === "string") return value.trim().length > 0;
   return true;
 }
 
-function normalizeDisplayValue(value: unknown): string | number | boolean | string[] | null {
+function normalizeDisplayValue(
+  value: unknown,
+): string | number | boolean | string[] | null {
   if (isPrimitive(value)) {
-    return isNonEmptyPrimitive(value) ? (typeof value === "string" ? value.trim() : value) : null;
+    return isNonEmptyPrimitive(value)
+      ? typeof value === "string"
+        ? value.trim()
+        : value
+      : null;
   }
 
   if (Array.isArray(value)) {
@@ -91,7 +99,10 @@ function orderKeys(keys: string[]) {
   });
 }
 
-export function sanitizeMailData(data: Record<string, any> | undefined, maxFields = 10) {
+export function sanitizeMailData(
+  data: Record<string, any> | undefined,
+  maxFields = 10,
+) {
   if (!isPlainObject(data)) return {};
 
   const out: Record<string, any> = {};
@@ -113,7 +124,10 @@ export function buildRecipientVars(recipient: PickedRecipientInput | null) {
   if (!recipient) return {};
 
   const chosenEmail = String(recipient.emails?.[0] || "").trim();
-  const allEmails = (recipient.allEmails?.length ? recipient.allEmails : recipient.emails || [])
+
+  const allEmails = (
+    recipient.allEmails?.length ? recipient.allEmails : recipient.emails || []
+  )
     .map((email) => String(email || "").trim())
     .filter(Boolean);
 
@@ -158,8 +172,10 @@ function sanitizeComposeValue(value: any, depth: number): any {
   if (!isPlainObject(value)) return undefined;
 
   const out: Record<string, any> = {};
+
   for (const key of Object.keys(value)) {
     if (TECHNICAL_KEYS.has(key)) continue;
+
     const cleaned = sanitizeComposeValue(value[key], depth - 1);
     if (cleaned !== undefined) out[key] = cleaned;
   }
@@ -186,11 +202,16 @@ export function buildMailContextPreview(vars: Record<string, any>) {
     .map((node: any) => {
       const nodeData = isPlainObject(node?.data) ? node.data : {};
       const firstField = Object.entries(nodeData)[0];
+
       if (!firstField) return null;
 
       return {
         label: String(node?.typeSlug || "reference"),
-        value: `${firstField[0]}: ${Array.isArray(firstField[1]) ? firstField[1].join(", ") : String(firstField[1])}`,
+        value: `${firstField[0]}: ${
+          Array.isArray(firstField[1])
+            ? firstField[1].join(", ")
+            : String(firstField[1])
+        }`,
       };
     })
     .filter(Boolean) as Array<{ label: string; value: string }>;
@@ -204,13 +225,21 @@ export function buildMailContextPreview(vars: Record<string, any>) {
   };
 }
 
-export function detectDraftWarnings(draft: { subject?: string; bodyText?: string; html?: string }) {
-  const haystack = `${draft.subject || ""}\n${draft.bodyText || ""}\n${draft.html || ""}`.toLowerCase();
+export function detectDraftWarnings(draft: {
+  subject?: string;
+  bodyText?: string;
+  html?: string;
+}) {
+  const haystack = `${draft.subject || ""}\n${draft.bodyText || ""}\n${
+    draft.html || ""
+  }`.toLowerCase();
+
   const warnings: string[] = [];
 
   if (haystack.includes("{{") || haystack.includes("}}")) {
     warnings.push("La bozza contiene ancora placeholder template non risolti.");
   }
+
   if (haystack.includes("mario") && haystack.includes("ciao")) {
     warnings.push("La bozza contiene testo placeholder che va rivisto.");
   }
