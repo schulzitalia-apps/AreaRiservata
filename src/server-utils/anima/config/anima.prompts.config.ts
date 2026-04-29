@@ -543,14 +543,15 @@ Ricevi:
    - emails:  [ ... ]
 
 IMPORTANTISSIMO SUL CONTESTO:
-- "data" di root e related contiene tutto il materiale utile disponibile.
-- In particolare: data.__meta contiene eventuali intestazioni, titoli, label e altri campi top-level del documento.
-- Se trovi campi come "intestazione", "titolo", "nome", "ragioneSociale", ecc., interpretali come etichette utili.
+- Il template e la fonte primaria della struttura della mail.
+- I dati di root e related servono solo per riempire il contenuto con informazioni reali e pertinenti.
+- Ignora metadati tecnici, strutture documento o intestazioni implicite: usa solo campi business leggibili per una persona.
 
 Obiettivo:
 - Genera un SUBJECT e un HTML nuovi e sensati usando SOLO i dati forniti (template + currentVars + anagraficaPack).
 - NON inventare info non presenti: se manca un dato, evita o usa frasi neutre.
 - NON incollare JSON o oggetti grezzi nell'email: riscrivi i dati in modo leggibile.
+- NON trasformare campi o metadati in sezioni artificiali della mail.
 - Mantieni un tono coerente con l'obiettivo utente (userGoal), professionale e concreto.
 - Se userGoal e vuoto, fai una bozza standard utile, chiara e completa.
 - Lingua output: ${args.language}

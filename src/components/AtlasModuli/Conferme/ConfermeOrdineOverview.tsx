@@ -2,30 +2,32 @@
 
 import { useDeferredValue, useState, useTransition } from "react";
 
-// Local types
 import type { TimeKey } from "./types";
 import type { CatKey } from "./types";
 
-// Helpers
 import { euro, formatPct, clamp } from "./format";
 import { colorForKey } from "./confermeOrdine.safe";
 
-// UI atoms
-import { KpiTile, DeltaPill, IconWallet, IconReceipt, IconTrend, IconPie } from "./ui";
+import {
+  KpiTile,
+  DeltaPill,
+  IconWallet,
+  IconReceipt,
+  IconTrend,
+  IconPie,
+  Card,
+  CardHeader,
+} from "./ui";
 
-// Hooks (NO MOCK)
 import { useConfermeOrdineAnalyticsSource } from "./hooks/useConfermeOrdineAnalyticsSource";
 import { useConfermeOrdineOverviewComputed } from "./hooks/useConfermeOrdineOverviewComputed";
 
-// Components
 import { Header } from "./components/Header";
 import { Grid1 } from "./components/Grid1";
 import { Grid2 } from "./components/Grid2";
 
-// Tabs globali
 import { CategoryTabsDyn } from "./CategoryTabsDyn";
 
-/** Time options (solo UI select) */
 const TIME_OPTIONS: Array<{ value: TimeKey; label: string }> = [
   { value: "mese", label: "Mese" },
   { value: "trimestre", label: "Trimestre" },
@@ -34,6 +36,11 @@ const TIME_OPTIONS: Array<{ value: TimeKey; label: string }> = [
   { value: "anno_fiscale", label: "Anno fiscale" },
 ];
 
+function colorAt(colors: string[] | undefined, index: number) {
+  if (!colors?.length) return "#94A3B8";
+  return colors[index % colors.length] ?? "#94A3B8";
+}
+
 export default function ConfermeOrdineOverview() {
   const [timeKey, setTimeKey] = useState<TimeKey>("anno");
   const [catKey, setCatKey] = useState<CatKey>("all");
@@ -41,10 +48,8 @@ export default function ConfermeOrdineOverview() {
   const deferredQ = useDeferredValue(q);
   const [isPending, startTransition] = useTransition();
 
-  // Data source (API + fetch)
   const { apiData, apiStatus, apiError } = useConfermeOrdineAnalyticsSource(timeKey);
 
-  // Computed data
   const computed = useConfermeOrdineOverviewComputed({
     apiData,
     timeKey,
@@ -57,14 +62,45 @@ export default function ConfermeOrdineOverview() {
   const catColor =
     computed.categoryMetaLike?.[String(catKey)]?.color ?? colorForKey(String(catKey));
 
-  // Gauge (avanzamento valore) — se non lo calcoli già nel computed
-  const gaugePercent = clamp((computed.currentValore / Math.max(1, computed.prevValore)) * 100, 0, 200);
+  const gaugePercent = clamp(
+    (computed.currentValore / Math.max(1, computed.prevValore)) * 100,
+    0,
+    200,
+  );
   const gaugeSubtitle = `${euro(computed.currentValore)} / ${euro(computed.prevValore)} (${Math.round(gaugePercent)}%)`;
+
+  const customerRanking = [...(computed.donutCurrent ?? [])]
+    .sort((a: any, b: any) => Number(b?.value ?? 0) - Number(a?.value ?? 0))
+    .filter((item: any) => Number(item?.value ?? 0) > 0)
+    .map((item: any, index: number) => ({
+      label: item?.label ?? "-",
+      value: Number(item?.value ?? 0),
+      color: colorAt(computed.donutColors, index),
+    }));
+
+  const customerOrderCountRanking = [...(computed.customerOrderCountRanking ?? [])]
+    .filter((item: any) => Number(item?.value ?? 0) > 0)
+    .map((item: any, index: number) => ({
+      label: item?.label ?? "-",
+      value: Number(item?.value ?? 0),
+      color: colorAt(computed.donutColors, index),
+    }));
+
+  const customerValuePerOrderRanking = [...(computed.customerValuePerOrderRanking ?? [])]
+    .filter((item: any) => Number(item?.count ?? 0) > 0)
+    .map((item: any, index: number) => ({
+      label: item?.label ?? "-",
+      value: Number(item?.value ?? 0),
+      count: Number(item?.count ?? 0),
+      total: Number(item?.total ?? 0),
+      color: colorAt(computed.donutColors, index),
+    }));
 
   return (
     <>
       <Header
         currentPeriodLabel={computed.currentPeriodLabel}
+        currentCount={computed.currentCount}
         timeKey={timeKey}
         setTimeKey={(v) => startTransition(() => setTimeKey(v))}
         setCatKeyAll={() => setCatKey("all")}
@@ -90,7 +126,6 @@ export default function ConfermeOrdineOverview() {
         upcomingTotal={computed.upcomingTotal}
       />
 
-      {/* KPI FULL WIDTH */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiTile
           title="Totale conferme"
@@ -114,7 +149,7 @@ export default function ConfermeOrdineOverview() {
         />
         <KpiTile
           title="Cliente principale"
-          value={computed.topCurrent?.label ?? "—"}
+          value={computed.topCurrent?.label ?? "-"}
           sub={`${formatPct(
             ((computed.topCurrent?.value ?? 0) / Math.max(1, computed.currentValore)) * 100,
             0,
@@ -124,6 +159,7 @@ export default function ConfermeOrdineOverview() {
       </div>
 
       <Grid2
+        top10={computed.top10}
         catLabel={computed.catLabel}
         currentPeriodLabel={computed.currentPeriodLabel}
         catKey={catKey}
@@ -136,6 +172,109 @@ export default function ConfermeOrdineOverview() {
         statusBreakdown={computed.statusBreakdown}
         CategoryTabsDyn={CategoryTabsDyn as any}
       />
+
+      <div className="mt-6 grid gap-6 xl:grid-cols-3">
+        <Card>
+          <CardHeader
+            title="Clienti per fatturato"
+            subTitle={`Periodo corrente (${computed.currentPeriodLabel})`}
+          />
+          <div className="px-4 pb-5 pt-1">
+            <div className="max-h-[320px] overflow-auto rounded-2xl border border-stroke/70 bg-white/40 p-3 [scrollbar-width:thin] dark:border-dark-3/70 dark:bg-gray-dark/20">
+              <div className="space-y-2">
+                {customerRanking.map((item) => (
+                  <div
+                    key={`${item.label}-${item.color}-value`}
+                    className="flex items-start justify-between gap-3 rounded-xl border border-stroke/50 bg-white/60 px-3 py-2 dark:border-dark-3/60 dark:bg-gray-dark/35"
+                  >
+                    <div className="flex min-w-0 items-start gap-2">
+                      <span
+                        className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ background: item.color }}
+                      />
+                      <span className="break-words text-sm font-semibold text-dark dark:text-white/85">
+                        {item.label}
+                      </span>
+                    </div>
+                    <span className="shrink-0 text-sm font-extrabold text-dark dark:text-white">
+                      {euro(item.value)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="Clienti per numero ordini"
+            subTitle={`Periodo corrente (${computed.currentPeriodLabel})`}
+          />
+          <div className="px-4 pb-5 pt-1">
+            <div className="max-h-[320px] overflow-auto rounded-2xl border border-stroke/70 bg-white/40 p-3 [scrollbar-width:thin] dark:border-dark-3/70 dark:bg-gray-dark/20">
+              <div className="space-y-2">
+                {customerOrderCountRanking.map((item) => (
+                  <div
+                    key={`${item.label}-${item.color}-count`}
+                    className="flex items-start justify-between gap-3 rounded-xl border border-stroke/50 bg-white/60 px-3 py-2 dark:border-dark-3/60 dark:bg-gray-dark/35"
+                  >
+                    <div className="flex min-w-0 items-start gap-2">
+                      <span
+                        className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ background: item.color }}
+                      />
+                      <span className="break-words text-sm font-semibold text-dark dark:text-white/85">
+                        {item.label}
+                      </span>
+                    </div>
+                    <span className="shrink-0 text-sm font-extrabold text-dark dark:text-white">
+                      {item.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="Rapporto fatturato / conferme"
+            subTitle={`Periodo corrente (${computed.currentPeriodLabel})`}
+          />
+          <div className="px-4 pb-5 pt-1">
+            <div className="max-h-[320px] overflow-auto rounded-2xl border border-stroke/70 bg-white/40 p-3 [scrollbar-width:thin] dark:border-dark-3/70 dark:bg-gray-dark/20">
+              <div className="space-y-2">
+                {customerValuePerOrderRanking.map((item) => (
+                  <div
+                    key={`${item.label}-${item.color}-ratio`}
+                    className="rounded-xl border border-stroke/50 bg-white/60 px-3 py-2 dark:border-dark-3/60 dark:bg-gray-dark/35"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-start gap-2">
+                        <span
+                          className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
+                          style={{ background: item.color }}
+                        />
+                        <span className="break-words text-sm font-semibold text-dark dark:text-white/85">
+                          {item.label}
+                        </span>
+                      </div>
+                      <span className="shrink-0 text-sm font-extrabold text-dark dark:text-white">
+                        {euro(item.value)}
+                      </span>
+                    </div>
+                    <div className="mt-1 pl-[18px] text-xs font-semibold text-gray-600 dark:text-dark-6">
+                      {item.count} conferme · {euro(item.total)} totali
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
     </>
   );
 }

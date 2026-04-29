@@ -5,6 +5,7 @@ import type { TimeKey } from "../types";
 
 type Props = {
   currentPeriodLabel: string;
+  currentCount: number;
 
   timeKey: TimeKey;
   setTimeKey: (v: TimeKey) => void;
@@ -32,6 +33,10 @@ export function Header(props: Props) {
 
           <span className="rounded-full border border-primary/25 bg-primary/5 px-3 py-1 text-xs font-extrabold text-primary">
             {props.currentPeriodLabel}
+          </span>
+
+          <span className="rounded-full border border-stroke bg-white/60 px-3 py-1 text-xs font-extrabold text-gray-700 dark:border-dark-3 dark:bg-gray-dark/40 dark:text-white/80">
+            {props.currentCount} conferme
           </span>
 
           {props.apiStatus === "loading" ? (

@@ -2,6 +2,7 @@ export type AnalyticsStatus = "idle" | "loading" | "succeeded" | "failed";
 
 export type ValueSums = {
   valore: number; // valoreCommessa
+  count: number;
 };
 
 export type MonthRow = {

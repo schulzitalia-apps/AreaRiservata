@@ -41,7 +41,7 @@ export const ANAGRAFICHE_LIST_UI_BY_SLUG: Partial<
     },
     columns: {
       mode: "custom",
-      keys: fk("numeroOrdine", "riferimento", "inizioConsegna"),
+      keys: fk("numeroOrdine", "riferimento", "statoAvanzamento", "inizioConsegna"),
       showVisibility: false,
     },
     controls: {

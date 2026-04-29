@@ -10,7 +10,8 @@ import { createEvento } from "@/components/Store/slices/eventiSlice";
 import TemplateList, { MailTemplateLite } from "./TemplateList";
 import MailComposer, { SenderOption } from "./MailComposer";
 import MailPreview from "./MailPreview";
-import RecipientPickerModal from "./RecipientPickerModal";
+import RecipientPickerModal, { PickedRecipient } from "./RecipientPickerModal";
+import { buildRecipientVars, sanitizeVarsForCompose } from "./utils/mailContext";
 
 type Avviso = { tipo: "successo" | "errore" | "info"; testo: string } | null;
 
@@ -19,19 +20,20 @@ function InlineAlert({ avviso, onClose }: { avviso: Avviso; onClose: () => void 
 
   const tone =
     avviso.tipo === "successo"
-      ? "bg-green-50 border-green-500 text-green-800 dark:bg-green-900/30 dark:border-green-400 dark:text-green-100"
+      ? "border-green-500 bg-green-50 text-green-800 dark:border-green-400 dark:bg-green-900/30 dark:text-green-100"
       : avviso.tipo === "errore"
-        ? "bg-red-50 border-red-500 text-red-800 dark:bg-red-900/30 dark:border-red-400 dark:text-red-100"
-        : "bg-blue-50 border-blue-500 text-blue-800 dark:bg-blue-900/30 dark:border-blue-400 dark:text-blue-100";
-
-  const icon = avviso.tipo === "successo" ? "✔️" : avviso.tipo === "errore" ? "⚠️" : "ℹ️";
+        ? "border-red-500 bg-red-50 text-red-800 dark:border-red-400 dark:bg-red-900/30 dark:text-red-100"
+        : "border-blue-500 bg-blue-50 text-blue-800 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-100";
 
   return (
-    <div role="alert" aria-live="polite" className={`mb-3 flex items-start gap-2 rounded-lg border px-3 py-2 ${tone}`}>
-      <span className="mt-0.5">{icon}</span>
-      <p className="text-sm leading-5">{avviso.testo}</p>
-      <button onClick={onClose} className="ml-auto rounded px-1.5 text-xs hover:opacity-80" aria-label="Chiudi notifica">
-        ✕
+    <div className={`mb-4 flex items-start gap-3 rounded-2xl border px-4 py-3 ${tone}`}>
+      <p className="text-sm leading-6">{avviso.testo}</p>
+      <button
+        onClick={onClose}
+        className="ml-auto rounded px-1.5 text-xs font-bold uppercase tracking-wide hover:opacity-80"
+        aria-label="Chiudi notifica"
+      >
+        Chiudi
       </button>
     </div>
   );
@@ -55,13 +57,11 @@ function htmlToText(html: string): string {
     doc.querySelectorAll("br").forEach((br) => br.replaceWith("\n"));
     doc.querySelectorAll("p, div, li").forEach((el) => el.append("\n"));
 
-    const txt = (doc.body.textContent || "")
+    return (doc.body.textContent || "")
       .replace(/\r/g, "")
       .replace(/[ \t]+\n/g, "\n")
       .replace(/\n{3,}/g, "\n\n")
       .trim();
-
-    return txt;
   } catch {
     return raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   }
@@ -71,15 +71,14 @@ function textToSimpleHtml(text: string): string {
   const t = (text || "").replace(/\r/g, "").trim();
   if (!t) return "";
 
-  const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const escape = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
   const paragraphs = t.split(/\n{2,}/g).map((p) => p.trim()).filter(Boolean);
-  return paragraphs.map((p) => `<p>${escape(p).replace(/\n/g, "<br/>")}</p>`).join("\n");
+  return paragraphs
+    .map((p) => `<p>${escape(p).replace(/\n/g, "<br/>")}</p>`)
+    .join("\n");
 }
-
-/* -------------------------------------------------------------------------- */
-/* ✅ EVENT AUTO - HELPERS                                                      */
-/* -------------------------------------------------------------------------- */
 
 type MailEventAutoConfig = {
   enabled: boolean;
@@ -135,7 +134,6 @@ function renderTemplateString(input: any, vars: Record<string, any>) {
   });
 }
 
-// ✅ FIX: qui prima avevo scritto “: any ts” e ti esplodeva tutto
 function renderPresetDeep(input: any, vars: Record<string, any>): any {
   if (Array.isArray(input)) return input.map((x) => renderPresetDeep(x, vars));
   if (isPlainObject(input)) {
@@ -148,30 +146,19 @@ function renderPresetDeep(input: any, vars: Record<string, any>): any {
 
 function toISODateOrNull(x: any): string | null {
   if (x == null) return null;
-
-  if (x instanceof Date) {
-    const t = x.getTime();
-    return Number.isFinite(t) ? x.toISOString() : null;
-  }
-
+  if (x instanceof Date) return Number.isFinite(x.getTime()) ? x.toISOString() : null;
   if (typeof x === "number") {
     const d = new Date(x);
     return Number.isFinite(d.getTime()) ? d.toISOString() : null;
   }
-
   if (typeof x === "string") {
     const s = x.trim();
     if (!s) return null;
     const d = new Date(s);
     return Number.isFinite(d.getTime()) ? d.toISOString() : null;
   }
-
   return null;
 }
-
-/* -------------------------------------------------------------------------- */
-/* TYPES API                                                                    */
-/* -------------------------------------------------------------------------- */
 
 type BootstrapResponse = {
   ok: true;
@@ -191,31 +178,25 @@ type PreviewResponse = {
 
 type ComposeResponse = {
   ok: true;
-  suggestion: {
-    vars: Record<string, any>;
-    subjectOverride?: string;
-  };
   rendered: {
     subject: string;
     html: string;
   };
 };
 
-type AnagraficaNode = { typeSlug: string; id: string; data: Record<string, any> };
-
-type PickedRecipient = {
-  scope: "ANAGRAFICA";
+type CcRecipient = {
+  key: string;
+  sourceKind: "ANAGRAFICA" | "AULA";
   typeSlug: string;
   id: string;
   label: string;
-  emails: string[];
-  allEmails?: string[];
-  data?: Record<string, any>;
-  related?: AnagraficaNode[];
+  email: string;
 };
 
 function suggestSenderIdFromEmails(emails: string[], senderOptions: SenderOption[]) {
-  const set = new Set((emails || []).map((e) => String(e || "").trim().toLowerCase()).filter(Boolean));
+  const set = new Set(
+    (emails || []).map((e) => String(e || "").trim().toLowerCase()).filter(Boolean),
+  );
   if (!set.size) return "";
 
   const match = senderOptions.find((s) => {
@@ -228,12 +209,7 @@ function suggestSenderIdFromEmails(emails: string[], senderOptions: SenderOption
 }
 
 type DraftMode = "auto" | "generated" | "manual";
-
-type Draft = {
-  subject: string;
-  html: string;
-  bodyText: string;
-};
+type Draft = { subject: string; html: string; bodyText: string };
 
 export default function UserMailPanel() {
   const params = useSearchParams();
@@ -244,39 +220,31 @@ export default function UserMailPanel() {
 
   const [loading, setLoading] = useState(true);
   const [avviso, setAvviso] = useState<Avviso>(null);
-
   const [mailEnabled, setMailEnabled] = useState(true);
   const [canSend, setCanSend] = useState(false);
-  const [role, setRole] = useState<string>("");
-
   const [templates, setTemplates] = useState<Array<MailTemplateLite & { eventAuto?: MailEventAutoConfig }>>([]);
   const [selectedKey, setSelectedKey] = useState<string | undefined>(initialTemplateKey);
-
   const [senderOptions, setSenderOptions] = useState<SenderOption[]>([]);
   const [defaultSenderIdentityId, setDefaultSenderIdentityId] = useState<string | undefined>(undefined);
-
   const [to, setTo] = useState("");
   const [senderIdentityId, setSenderIdentityId] = useState<string>("");
-
-  const [recipientOpen, setRecipientOpen] = useState(false);
+  const [primaryRecipientOpen, setPrimaryRecipientOpen] = useState(false);
+  const [ccRecipientOpen, setCcRecipientOpen] = useState(false);
   const [pickedRecipient, setPickedRecipient] = useState<PickedRecipient | null>(null);
-
-  const [vars, setVars] = useState<Record<string, any>>({ name: "Mario", message: "Ciao!" });
-
+  const [ccRecipients, setCcRecipients] = useState<CcRecipient[]>([]);
+  const [vars, setVars] = useState<Record<string, any>>({});
   const [draftMode, setDraftMode] = useState<DraftMode>("auto");
   const [draft, setDraft] = useState<Draft>({ subject: "", html: "", bodyText: "" });
+  const [composing, setComposing] = useState(false);
 
-  // ✅ NEW: ref per avere sempre l'ultima bozza al click "Invia"
   const draftRef = useRef(draft);
   useEffect(() => {
     draftRef.current = draft;
   }, [draft]);
 
-  const [composing, setComposing] = useState(false);
-
   const selectedTemplate = useMemo(
     () => templates.find((t) => t.key === selectedKey) || null,
-    [templates, selectedKey]
+    [templates, selectedKey],
   );
 
   useEffect(() => {
@@ -290,11 +258,8 @@ export default function UserMailPanel() {
       setLoading(true);
       try {
         const data = await jsonFetch<BootstrapResponse>("/api/mail/bootstrap");
-
-        setRole(data.role);
         setMailEnabled(!!data.mailEnabled);
         setCanSend(!!data.canSend);
-
         setTemplates(Array.isArray(data.templates) ? data.templates : []);
         setSenderOptions(Array.isArray(data.senderOptions) ? data.senderOptions : []);
         setDefaultSenderIdentityId(data.defaultSenderIdentityId);
@@ -311,31 +276,22 @@ export default function UserMailPanel() {
         setLoading(false);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [initialTemplateKey]);
 
   useEffect(() => {
     if (!selectedKey) return;
     const sp = new URLSearchParams(Array.from(params.entries()));
     sp.set("template", selectedKey);
     router.replace(`?${sp.toString()}`);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedKey]);
+  }, [params, router, selectedKey]);
 
   useEffect(() => {
     setDraftMode("auto");
     setDraft({ subject: "", html: "", bodyText: "" });
-  }, [selectedKey]);
+  }, [selectedKey, pickedRecipient?.id, pickedRecipient?.typeSlug]);
 
   useEffect(() => {
-    setDraftMode("auto");
-    setDraft({ subject: "", html: "", bodyText: "" });
-  }, [pickedRecipient?.id, pickedRecipient?.typeSlug]);
-
-  useEffect(() => {
-    if (!selectedKey) return;
-
-    if (!mailEnabled) {
+    if (!selectedKey || !mailEnabled) {
       setDraft({ subject: "", html: "", bodyText: "" });
       return;
     }
@@ -349,12 +305,10 @@ export default function UserMailPanel() {
         });
 
         if (draftMode !== "auto") return;
-
-        const bodyText = htmlToText(res.html || "");
         setDraft({
           subject: res.subject || "",
           html: res.html || "",
-          bodyText,
+          bodyText: htmlToText(res.html || ""),
         });
       } catch {
         if (draftMode !== "auto") return;
@@ -363,7 +317,6 @@ export default function UserMailPanel() {
     }, 350);
 
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedKey, mailEnabled, vars, draftMode]);
 
   async function maybeCreateAutoEventoAfterSend() {
@@ -374,23 +327,22 @@ export default function UserMailPanel() {
 
     const preset = isPlainObject(ev.dataPreset) ? ev.dataPreset : {};
     const renderedData = renderPresetDeep(preset, vars);
-
     const startAt =
       ev.startAtSource === "var"
         ? toISODateOrNull(getByPath(vars, ev.startAtVarPath))
         : new Date().toISOString();
-
     const endAt =
       ev.endAtSource === "var"
         ? toISODateOrNull(getByPath(vars, ev.endAtVarPath))
         : null;
 
     const gruppoType = ev.gruppo?.gruppoType ? String(ev.gruppo.gruppoType).trim() : "";
-    const gruppoId = ev.gruppo?.gruppoIdVarPath ? String(getByPath(vars, ev.gruppo.gruppoIdVarPath) || "").trim() : "";
+    const gruppoId = ev.gruppo?.gruppoIdVarPath
+      ? String(getByPath(vars, ev.gruppo.gruppoIdVarPath) || "").trim()
+      : "";
 
     const partecipanti: any[] = [];
     const seen = new Set<string>();
-
     const roleP = ev.partecipante?.role ?? null;
     const statusP = ev.partecipante?.status ?? null;
     const quantityP = ev.partecipante?.quantity ?? null;
@@ -417,7 +369,9 @@ export default function UserMailPanel() {
       pushParticipant(pickedRecipient.typeSlug, pickedRecipient.id);
       for (const r of pickedRecipient.related || []) pushParticipant(r.typeSlug, r.id);
     } else {
-      const pType = ev.partecipante?.anagraficaType ? String(ev.partecipante.anagraficaType).trim() : "";
+      const pType = ev.partecipante?.anagraficaType
+        ? String(ev.partecipante.anagraficaType).trim()
+        : "";
       const pId = ev.partecipante?.anagraficaIdVarPath
         ? String(getByPath(vars, ev.partecipante.anagraficaIdVarPath) || "").trim()
         : "";
@@ -427,7 +381,7 @@ export default function UserMailPanel() {
     const payload: any = {
       data: renderedData,
       timeKind: ev.timeKind,
-      startAt: startAt,
+      startAt,
       endAt: ev.timeKind === "point" ? null : endAt,
       allDay: !!ev.allDay,
       recurrence: null,
@@ -440,28 +394,29 @@ export default function UserMailPanel() {
       await dispatch(createEvento({ type: eventoType, payload }) as any).unwrap();
       setAvviso({ tipo: "successo", testo: "Email inviata + evento creato automaticamente." });
     } catch (e: any) {
-      setAvviso({ tipo: "errore", testo: e?.message || "Email inviata, ma creazione evento fallita." });
+      setAvviso({
+        tipo: "errore",
+        testo: e?.message || "Email inviata, ma creazione evento fallita.",
+      });
     }
   }
 
   async function onSend() {
     if (!mailEnabled) return setAvviso({ tipo: "errore", testo: "Sistema mail disabilitato." });
-    if (!canSend) return setAvviso({ tipo: "errore", testo: "Il tuo ruolo non può inviare email." });
+    if (!canSend) return setAvviso({ tipo: "errore", testo: "Invio non consentito per il tuo ruolo." });
     if (!selectedKey) return setAvviso({ tipo: "errore", testo: "Seleziona un template." });
 
     const toEmail = to.trim();
-    if (!toEmail) return setAvviso({ tipo: "errore", testo: "Inserisci un destinatario (To)." });
+    if (!toEmail) return setAvviso({ tipo: "errore", testo: "Inserisci un destinatario." });
 
     const fallbackFirst = senderOptions?.[0]?.id || "";
     const finalSenderId = (senderIdentityId || defaultSenderIdentityId || fallbackFirst).trim();
     if (!finalSenderId) return setAvviso({ tipo: "errore", testo: "Manca un mittente configurato." });
 
-    // ✅ usa SEMPRE l'ultima bozza (anche se hai cliccato Invio subito dopo una digitazione)
     const subjectToSend = (draftRef.current.subject || "").trim();
     const htmlToSend = (draftRef.current.html || "").trim();
-
     if (!subjectToSend && !htmlToSend) {
-      return setAvviso({ tipo: "errore", testo: "La bozza è vuota: genera o scrivi il contenuto prima di inviare." });
+      return setAvviso({ tipo: "errore", testo: "La bozza e vuota." });
     }
 
     try {
@@ -470,6 +425,7 @@ export default function UserMailPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           to: toEmail,
+          cc: ccRecipients.map((item) => item.email),
           templateKey: selectedKey,
           vars,
           senderIdentityId: finalSenderId,
@@ -500,23 +456,22 @@ export default function UserMailPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           templateKey: selectedKey,
-          currentVars: vars,
-          anagrafica: pickedRecipient ? { typeSlug: pickedRecipient.typeSlug, id: pickedRecipient.id } : undefined,
+          currentVars: sanitizeVarsForCompose(vars),
+          anagrafica: pickedRecipient
+            ? { typeSlug: pickedRecipient.typeSlug, id: pickedRecipient.id }
+            : undefined,
           userGoal: "",
           language: "it",
         }),
       });
 
-      const mergedVars = { ...(vars || {}), ...(res?.suggestion?.vars || {}) };
-      setVars(mergedVars);
-
-      const newSubject = res?.rendered?.subject || "";
       const newHtml = res?.rendered?.html || "";
-      const newBodyText = htmlToText(newHtml);
-
+      setDraft({
+        subject: res?.rendered?.subject || "",
+        html: newHtml,
+        bodyText: htmlToText(newHtml),
+      });
       setDraftMode("generated");
-      setDraft({ subject: newSubject, html: newHtml, bodyText: newBodyText });
-
       setAvviso({ tipo: "successo", testo: "Bozza generata." });
     } catch (e: any) {
       setAvviso({ tipo: "errore", testo: e?.message || "Errore generazione bozza" });
@@ -537,78 +492,89 @@ export default function UserMailPanel() {
 
     setVars((prev) => ({
       ...(prev || {}),
-      recipient: {
-        scope: p.scope,
-        email: chosenEmail || null,
-        emailsAll: all,
-      },
-      anagrafica: {
-        type: p.typeSlug,
-        id: p.id,
-        label: p.label,
-        ...(p.data ? { data: p.data } : {}),
-        ...(p.related ? { related: p.related } : {}),
-      },
+      ...buildRecipientVars({
+        ...p,
+        scope: "ANAGRAFICA",
+        emails: chosenEmail ? [chosenEmail] : p.emails,
+        allEmails: all,
+      }),
     }));
+  }
 
-    setAvviso({ tipo: "successo", testo: "Destinatario selezionato da anagrafica." });
+  function handleAddCcRecipient(p: PickedRecipient) {
+    const email = String(p.emails?.[0] || "").trim().toLowerCase();
+    if (!email) {
+      setAvviso({ tipo: "errore", testo: "Il record selezionato non ha email utilizzabili." });
+      return;
+    }
+
+    setCcRecipients((prev) => {
+      const key = `${p.sourceKind}:${p.typeSlug}:${p.id}:${email}`;
+      if (prev.some((item) => item.key === key || item.email === email)) return prev;
+      return [
+        ...prev,
+        {
+          key,
+          sourceKind: p.sourceKind,
+          typeSlug: p.typeSlug,
+          id: p.id,
+          label: p.label,
+          email,
+        },
+      ];
+    });
   }
 
   if (loading) {
     return (
-      <div className="rounded-[10px] border border-stroke bg-white p-4 shadow-1 dark:border-dark-3 dark:bg-gray-dark dark:shadow-card">
-        <div className="animate-pulse space-y-3">
-          <div className="h-6 w-72 rounded bg-gray-2 dark:bg-dark-2" />
-          <div className="h-24 rounded bg-gray-2 dark:bg-dark-2" />
-          <div className="h-24 rounded bg-gray-2 dark:bg-dark-2" />
+      <div className="rounded-[28px] border border-stroke/80 bg-white p-5 shadow-1 dark:border-dark-3/80 dark:bg-gray-dark dark:shadow-card">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 w-72 rounded bg-gray-2 dark:bg-dark-2" />
+          <div className="h-16 rounded-2xl bg-gray-2 dark:bg-dark-2" />
+          <div className="h-80 rounded-2xl bg-gray-2 dark:bg-dark-2" />
         </div>
       </div>
     );
   }
 
   const recipientPill = pickedRecipient
-    ? { label: pickedRecipient.label, meta: `${pickedRecipient.typeSlug} · ${pickedRecipient.id}` }
+    ? { label: pickedRecipient.label, meta: pickedRecipient.typeSlug }
     : null;
 
   const disabledComposer = !mailEnabled || !canSend || !selectedKey;
   const hardDisabledCtas = disabledComposer || composing;
 
   return (
-    <div className="w-full rounded-[10px] bg-white shadow-1 dark:bg-gray-dark dark:shadow-card">
-      <div className="flex items-center justify-between border-b border-stroke px-4 py-3 dark:border-dark-3">
-        <div className="min-w-0">
-          <h3 className="truncate text-lg font-semibold text-dark dark:text-white">
-            {selectedTemplate?.name ?? "Template Email"}
-          </h3>
+    <div className="w-full overflow-hidden rounded-[28px] border border-stroke/80 bg-white shadow-1 dark:border-dark-3/80 dark:bg-gray-dark dark:shadow-card">
+      <div className="border-b border-stroke/80 px-5 py-5 dark:border-dark-3/80">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-2xl font-bold text-dark dark:text-white">Composizione mail</h2>
+            <div className="mt-1 text-sm text-dark/60 dark:text-white/60">
+              Seleziona un template, scegli il destinatario e modifica liberamente il testo.
+            </div>
+          </div>
 
-          <div className="mt-0.5 text-xs text-dark/60 dark:text-white/60">
-            Ruolo: <span className="font-mono">{role || "—"}</span> ·{" "}
-            <span className={cn("font-semibold", mailEnabled ? "text-emerald-600" : "text-red-600")}>
-              {mailEnabled ? "MAIL ON" : "MAIL OFF"}
-            </span>{" "}
-            ·{" "}
-            <span className={cn("font-semibold", canSend ? "text-emerald-600" : "text-red-600")}>
-              {canSend ? "PUÒ INVIARE" : "NON PUÒ INVIARE"}
-            </span>
-            {selectedTemplate?.eventAuto?.enabled ? (
-              <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800 dark:bg-blue-900/30 dark:text-blue-100">
-                AUTOEVENTO ON
+          <div className="flex items-center gap-2">
+            {selectedTemplate ? (
+              <span className="rounded-full border border-stroke px-3 py-1 text-xs font-semibold text-dark/70 dark:border-dark-3 dark:text-white/70">
+                {selectedTemplate.name}
               </span>
             ) : null}
-            {draftMode !== "auto" ? (
-              <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-100">
-                {draftMode === "generated" ? "BOZZA GENERATA" : "MODIFICA MANUALE"}
+            {!mailEnabled ? (
+              <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700 dark:bg-red-500/15 dark:text-red-200">
+                Mail off
               </span>
             ) : null}
           </div>
         </div>
       </div>
 
-      <div className="p-4">
+      <div className="px-5 pb-5 pt-4">
         <InlineAlert avviso={avviso} onClose={() => setAvviso(null)} />
 
-        <div className="flex min-h-[56vh]">
-          <section className="flex min-h-[56vh] flex-1 flex-col gap-4">
+        <div className="flex min-h-[60vh] gap-0">
+          <section className="flex flex-1 flex-col gap-4 pr-0 lg:pr-5">
             <MailComposer
               disabled={disabledComposer}
               to={to}
@@ -617,13 +583,29 @@ export default function UserMailPanel() {
                 setDraft({ subject: "", html: "", bodyText: "" });
                 setTo(v);
               }}
+              ccRecipients={ccRecipients.map((item) => ({
+                key: item.key,
+                label: item.label,
+                email: item.email,
+                meta: item.sourceKind === "AULA" ? `Aula - ${item.typeSlug}` : `Anagrafica - ${item.typeSlug}`,
+              }))}
+              onOpenCcPicker={() => setCcRecipientOpen(true)}
+              onRemoveCcRecipient={(key) => {
+                setCcRecipients((prev) => prev.filter((item) => item.key !== key));
+              }}
               senderOptions={senderOptions}
               senderIdentityId={senderIdentityId}
               onChangeSenderIdentityId={setSenderIdentityId}
-              onOpenRecipientPicker={() => setRecipientOpen(true)}
+              onOpenRecipientPicker={() => setPrimaryRecipientOpen(true)}
               recipientPill={recipientPill}
               onClearRecipient={() => {
                 setPickedRecipient(null);
+                setVars((prev) => {
+                  const next = { ...(prev || {}) };
+                  delete next.recipient;
+                  delete next.anagrafica;
+                  return next;
+                });
                 setDraftMode("auto");
                 setDraft({ subject: "", html: "", bodyText: "" });
               }}
@@ -634,7 +616,7 @@ export default function UserMailPanel() {
               subject={draft.subject}
               bodyText={draft.bodyText}
               disabled={!mailEnabled}
-              hint={!selectedKey ? "Seleziona un template a destra." : "Anteprima generata automaticamente."}
+              hint={!selectedKey ? "Seleziona un template a destra." : "Il testo del template comparira qui automaticamente."}
               onChangeSubject={(v) => {
                 setDraftMode("manual");
                 setDraft((prev) => ({ ...prev, subject: v }));
@@ -649,36 +631,34 @@ export default function UserMailPanel() {
               }}
             />
 
-            <div className="rounded-lg border border-stroke p-4 dark:border-dark-3">
-              <div className="grid gap-2 sm:grid-cols-2">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-stroke/80 px-4 py-4 dark:border-dark-3/80">
+              <div className="text-xs text-dark/60 dark:text-white/60">
+                La mail inviata usera esattamente questo testo.
+              </div>
+
+              <div className="flex flex-wrap gap-2">
                 <button
                   onClick={onCompose}
                   disabled={hardDisabledCtas}
                   className={cn(
-                    "rounded-2xl border-2 px-5 py-3 text-sm font-bold",
-                    "border-primary text-primary hover:bg-primary/10",
-                    "dark:border-red-400 dark:text-red-400 dark:hover:bg-red-400/10",
-                    hardDisabledCtas && "opacity-60 cursor-not-allowed"
+                    "rounded-xl border px-4 py-2 text-sm font-semibold transition",
+                    "border-primary/30 text-primary hover:bg-primary/5",
+                    hardDisabledCtas && "cursor-not-allowed opacity-60",
                   )}
-                  title="Genera automaticamente il corpo email usando i dati disponibili"
                 >
-                  {composing ? "Genero…" : "Genera bozza"}
+                  {composing ? "Genero..." : "Genera bozza"}
                 </button>
 
                 <button
                   onClick={onSend}
                   disabled={hardDisabledCtas}
                   className={cn(
-                    "rounded-2xl px-5 py-3 text-sm font-bold text-white hover:opacity-90",
-                    hardDisabledCtas ? "bg-gray-400 cursor-not-allowed" : "bg-primary"
+                    "rounded-xl px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90",
+                    hardDisabledCtas ? "cursor-not-allowed bg-gray-400" : "bg-primary",
                   )}
                 >
                   Invia
                 </button>
-              </div>
-
-              <div className="mt-2 text-[11px] text-dark/60 dark:text-white/60">
-                La mail inviata sarà esattamente questa bozza (anche se modificata a mano).
               </div>
             </div>
           </section>
@@ -697,13 +677,25 @@ export default function UserMailPanel() {
       </div>
 
       <RecipientPickerModal
-        open={recipientOpen}
-        onClose={() => setRecipientOpen(false)}
+        open={primaryRecipientOpen}
+        onClose={() => setPrimaryRecipientOpen(false)}
         onPick={(p: any) => {
           setDraftMode("auto");
           setDraft({ subject: "", html: "", bodyText: "" });
           handlePickRecipient(p as PickedRecipient);
         }}
+        mode="primary"
+        allowAule={false}
+      />
+
+      <RecipientPickerModal
+        open={ccRecipientOpen}
+        onClose={() => setCcRecipientOpen(false)}
+        onPick={(p: any) => {
+          handleAddCcRecipient(p as PickedRecipient);
+        }}
+        mode="cc"
+        allowAule={true}
       />
     </div>
   );

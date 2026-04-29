@@ -20,20 +20,12 @@ const FALLBACK_DONUT_COLORS = [
 
 type Props = {
   currentPeriodLabel: string;
-
-  // prev donut
   categoriesPrev: any;
-
-  // gauge
   gaugePercent: number;
   gaugeSubtitle: string;
   deltaIsUp: boolean;
-
-  // current donut
   categoriesCurrent: any;
   donutColors: string[];
-
-  // upcoming
   q: string;
   setQ: (v: string) => void;
   deferredQ: string;
@@ -47,9 +39,8 @@ export function Grid1(props: Props) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-12 lg:items-stretch">
-      {/* sinistra: prev + gauge */}
       <div className="lg:col-span-3">
-        <Card className="h-full">
+        <Card className="h-full overflow-visible">
           <CardHeader title="Periodo precedente" subTitle={props.currentPeriodLabel} />
 
           <div className="px-4 pb-4 pt-1">
@@ -63,6 +54,7 @@ export function Grid1(props: Props) {
               showLegend={false}
               glow
               className="-mx-2"
+              options={{ tooltip: { enabled: true } }}
             />
           </div>
 
@@ -99,9 +91,8 @@ export function Grid1(props: Props) {
         </Card>
       </div>
 
-      {/* centro: donut current */}
       <div className="lg:col-span-6">
-        <Card className="h-full">
+        <Card className="h-full overflow-visible">
           <div className="px-5 pt-5">
             <div className="text-xs font-semibold text-gray-500 dark:text-dark-6">
               Distribuzione per cliente
@@ -125,31 +116,36 @@ export function Grid1(props: Props) {
               showLegend={false}
               glow
               className="-mx-3 sm:-mx-5"
+              options={{ tooltip: { enabled: true } }}
             />
           </div>
         </Card>
       </div>
 
-      {/* destra: upcoming */}
       <div className="lg:col-span-3">
         <Card className="h-full">
-          <CardHeader
-            title="Prossime consegne"
-            right={
-              <span className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-extrabold text-primary">
-                Tot: {euro(props.upcomingTotal)}
-              </span>
-            }
-          />
+          <div className="flex flex-col gap-3 px-5 pb-4 pt-5">
+            <div className="flex flex-col gap-2">
+              <div className="text-base font-extrabold text-dark dark:text-white">
+                Prossime consegne
+              </div>
+              <div className="flex items-center justify-start">
+                <span className="inline-flex max-w-full items-center rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-extrabold text-primary">
+                  Totale: {euro(props.upcomingTotal)}
+                </span>
+              </div>
+            </div>
+          </div>
+
           <div className="px-4 pb-4">
             <div className="mb-3">
-              <label className="text-xs font-semibold text-gray-500 dark:text-dark-6">
+              <label className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500 dark:text-dark-6">
                 Cerca
               </label>
               <input
                 value={props.q}
                 onChange={(e) => props.setQ(e.target.value)}
-                placeholder="Es. Rossi, ordine 123, consegna…"
+                placeholder="Es. Rossi, ordine 123, consegna..."
                 className={cn(
                   "mt-1 w-full rounded-lg border border-stroke bg-white px-3 py-2 text-sm font-semibold text-dark outline-none",
                   "focus:border-primary/40",
@@ -158,13 +154,15 @@ export function Grid1(props: Props) {
               />
             </div>
 
-            <div className="max-h-[560px] overflow-auto pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <UpcomingTable rows={props.filteredUpcoming as any} />
+            <div className="overflow-hidden rounded-2xl border border-stroke/70 dark:border-dark-3/70">
+              <div className="max-h-[560px] overflow-auto pr-1 [scrollbar-width:thin]">
+                <UpcomingTable rows={props.filteredUpcoming as any} />
+              </div>
             </div>
 
             {!props.filteredUpcoming.length ? (
               <div className="mt-3 rounded-lg border border-dashed border-stroke p-3 text-center text-sm font-semibold text-gray-600 dark:border-dark-3 dark:text-dark-6">
-                Nessun risultato per “{props.deferredQ}”.
+                Nessun risultato per &quot;{props.deferredQ}&quot;.
               </div>
             ) : null}
           </div>

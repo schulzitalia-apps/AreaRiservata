@@ -84,6 +84,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
 
   const recipients = parseRecipients(body?.to);
+  const ccRecipients = parseRecipients(body?.cc);
   const templateKey = String(body?.templateKey || "").trim();
 
   const vars =
@@ -142,6 +143,7 @@ export async function POST(req: NextRequest) {
 
   const { messageId } = await sendEmail({
     to: recipients,
+    cc: ccRecipients,
     subject,
     html,
     replyTo: sender.replyToEmail || null,

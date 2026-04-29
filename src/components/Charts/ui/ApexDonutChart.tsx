@@ -118,13 +118,15 @@ export function ApexDonutChart({
     },
     tooltip: {
       theme: "dark",
+      fillSeriesColor: false,
+      style: { fontSize: "13px" },
       y: { formatter: (value) => valueFormatter(Number(value)) },
     },
     grid: { padding: { top: 0, bottom: 0, left: 0, right: 0 } },
   };
 
   return (
-    <div className={cn("relative z-20 w-full max-w-full overflow-hidden md:overflow-visible", className)}>
+    <div className={cn("relative z-[80] w-full max-w-full overflow-hidden md:overflow-visible", className)}>
       {glow ? (
         <div
           className="pointer-events-none absolute inset-0 rounded-2xl blur-2xl opacity-60"
@@ -135,7 +137,7 @@ export function ApexDonutChart({
       ) : null}
 
       <div
-        className="relative z-20 w-full max-w-full overflow-hidden md:overflow-visible [&_.apexcharts-canvas]:!max-w-full [&_.apexcharts-svg]:!max-w-full [&_.apexcharts-tooltip]:z-[90]"
+        className="relative z-[80] w-full max-w-full overflow-hidden md:overflow-visible [&_.apexcharts-canvas]:!max-w-full [&_.apexcharts-svg]:!max-w-full [&_.apexcharts-tooltip]:!z-[9999] [&_.apexcharts-tooltip]:!pointer-events-none [&_.apexcharts-tooltip]:!overflow-visible [&_.apexcharts-tooltip]:!rounded-xl [&_.apexcharts-tooltip]:!border [&_.apexcharts-tooltip]:!border-white/10 [&_.apexcharts-tooltip]:!bg-slate-950/95 [&_.apexcharts-tooltip]:!shadow-2xl [&_.apexcharts-tooltip]:!backdrop-blur-md"
         style={{ filter: `drop-shadow(0 0 18px ${hexToRgba(glowA, 0.28)}) drop-shadow(0 0 26px ${hexToRgba(glowB, 0.18)})` }}
       >
         <Chart options={{ ...base, ...(options ?? {}) }} series={series} type="donut" height={height} width="100%" />

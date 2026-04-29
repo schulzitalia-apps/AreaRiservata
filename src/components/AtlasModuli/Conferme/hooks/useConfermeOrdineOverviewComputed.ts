@@ -16,6 +16,9 @@ import {
   buildMonthlyCurrentFromApi,
   buildBarSeriesLike,
   buildUpcomingFromApi,
+  buildTopValueFromApi,
+  buildCustomerOrderCountRankingFromApi,
+  buildCustomerValuePerOrderRankingFromApi,
   buildStatusBreakdownFromApi,
 } from "../confermeOrdine.api-adapters";
 
@@ -86,12 +89,14 @@ export function useConfermeOrdineOverviewComputed(args: {
    * Totals current/prev + delta
    */
   const totals = useMemo(() => {
-    if (!apiData) return { current: { valore: 0 }, prev: { valore: 0 } };
+    if (!apiData) return { current: { valore: 0, count: 0 }, prev: { valore: 0, count: 0 } };
     return buildTotalsLike({ apiData, timeKey });
   }, [apiData, timeKey]);
 
   const currentValore = totals.current.valore ?? 0;
   const prevValore = totals.prev.valore ?? 0;
+  const currentCount = totals.current.count ?? 0;
+  const prevCount = totals.prev.count ?? 0;
 
   const deltaAbs = currentValore - prevValore;
   const deltaPct = (deltaAbs / Math.max(1, prevValore)) * 100;
@@ -135,7 +140,7 @@ export function useConfermeOrdineOverviewComputed(args: {
     const query = deferredQ.trim().toLowerCase();
     if (!query) return upcoming;
     return upcoming.filter((r: any) =>
-      `${r.title} ${r.dateLabel}`.toLowerCase().includes(query),
+      `${r.title} ${r.customer ?? ""} ${r.dateLabel}`.toLowerCase().includes(query),
     );
   }, [upcoming, deferredQ]);
 
@@ -143,6 +148,29 @@ export function useConfermeOrdineOverviewComputed(args: {
     () => filteredUpcoming.reduce((a: number, r: any) => a + (r.amount ?? 0), 0),
     [filteredUpcoming],
   );
+
+  const top10 = useMemo(() => {
+    if (!apiData) return [];
+    return buildTopValueFromApi({ apiData, catKey });
+  }, [apiData, catKey]);
+
+  const customerOrderCountRanking = useMemo(() => {
+    if (!apiData) return [];
+    return buildCustomerOrderCountRankingFromApi({
+      apiData,
+      timeKey,
+      categoryMetaLike,
+    });
+  }, [apiData, timeKey, categoryMetaLike]);
+
+  const customerValuePerOrderRanking = useMemo(() => {
+    if (!apiData) return [];
+    return buildCustomerValuePerOrderRankingFromApi({
+      apiData,
+      timeKey,
+      categoryMetaLike,
+    });
+  }, [apiData, timeKey, categoryMetaLike]);
 
   /**
    * Monthly current window + bar
@@ -183,7 +211,9 @@ export function useConfermeOrdineOverviewComputed(args: {
     categoryTabItems,
 
     currentValore,
+    currentCount,
     prevValore,
+    prevCount,
     deltaAbs,
     deltaPct,
     deltaIsUp,
@@ -196,6 +226,9 @@ export function useConfermeOrdineOverviewComputed(args: {
     upcoming,
     filteredUpcoming,
     upcomingTotal,
+    top10,
+    customerOrderCountRanking,
+    customerValuePerOrderRanking,
 
     monthly,
     barSeries,

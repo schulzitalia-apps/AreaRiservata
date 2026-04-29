@@ -1,4 +1,3 @@
-// src/components/Mail/RecipientPickerModal.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -7,9 +6,21 @@ import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/select";
 
 import { ANAGRAFICA_TYPES } from "@/config/anagrafiche.types.public";
+import { AULE_TYPES } from "@/config/aule.types.public";
 
-import type { AnagraficaPreview, AnagraficaFull } from "@/components/Store/models/anagrafiche";
-import { fetchAnagrafiche, fetchAnagrafica } from "@/components/Store/slices/anagraficheSlice";
+import type {
+  AnagraficaPreview,
+  AnagraficaFull,
+} from "@/components/Store/models/anagrafiche";
+import type { AulaPreview, AulaDetail } from "@/components/Store/models/aule";
+import {
+  fetchAnagrafiche,
+  fetchAnagrafica,
+} from "@/components/Store/slices/anagraficheSlice";
+import {
+  fetchAuleByType,
+  fetchAulaById,
+} from "@/components/Store/slices/auleSlice";
 import { useAppDispatch, useAppSelector } from "@/components/Store/hooks";
 
 import { extractEmailsDeep, getDocData } from "./utils/extractEmails";
@@ -17,8 +28,8 @@ import { extractEmailsDeep, getDocData } from "./utils/extractEmails";
 type AnagraficaNode = { typeSlug: string; id: string; data: Record<string, any> };
 type AnagraficaPack = { root: AnagraficaNode; related: AnagraficaNode[]; emails: string[] };
 
-type PickedRecipient = {
-  scope: "ANAGRAFICA";
+export type PickedRecipient = {
+  sourceKind: "ANAGRAFICA" | "AULA";
   typeSlug: string;
   id: string;
   label: string;
@@ -32,18 +43,19 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onPick: (picked: PickedRecipient) => void;
+  mode?: "primary" | "cc";
+  allowAule?: boolean;
 };
 
-function getItemLabel(item: AnagraficaPreview): string {
+type SourceKind = "anagrafiche" | "aule";
+
+function getAnagraficaItemLabel(item: AnagraficaPreview): string {
   const anyItem = item as any;
-  return (
-    anyItem.displayName ||
-    anyItem.title ||
-    anyItem.name ||
-    anyItem.label ||
-    anyItem.codice ||
-    item.id
-  );
+  return anyItem.displayName || anyItem.title || anyItem.name || anyItem.label || anyItem.codice || item.id;
+}
+
+function getAulaItemLabel(item: AulaPreview): string {
+  return item.label || item.id;
 }
 
 async function jsonFetch<T = any>(url: string, init?: RequestInit): Promise<T> {
@@ -53,24 +65,44 @@ async function jsonFetch<T = any>(url: string, init?: RequestInit): Promise<T> {
   return json as T;
 }
 
-export default function RecipientPickerModal({ open, onClose, onPick }: Props) {
+function extractEmailsFromAulaDetail(aula: AulaDetail | undefined): string[] {
+  if (!aula) return [];
+  return extractEmailsDeep({
+    campi: aula.campi || {},
+    partecipanti: aula.partecipanti || [],
+    maestri: aula.maestri || [],
+  });
+}
+
+export default function RecipientPickerModal({
+  open,
+  onClose,
+  onPick,
+  mode = "primary",
+  allowAule = false,
+}: Props) {
   const dispatch = useAppDispatch();
 
-  const [typeSlug, setTypeSlug] = useState<string>(
-    (ANAGRAFICA_TYPES?.[0] as any)?.slug || "clienti"
+  const [sourceKind, setSourceKind] = useState<SourceKind>("anagrafiche");
+  const [entityType, setEntityType] = useState<string>(
+    (ANAGRAFICA_TYPES?.[0] as any)?.slug || "clienti",
   );
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string>("");
-
   const [step, setStep] = useState<"list" | "chooseEmail">("list");
   const [pickedDraft, setPickedDraft] = useState<PickedRecipient | null>(null);
   const [emailChoice, setEmailChoice] = useState<string>("");
-
   const [selecting, setSelecting] = useState(false);
 
-  const bucket = useAppSelector((s: any) => s.anagrafiche?.byType?.[typeSlug]);
-  const items: AnagraficaPreview[] = bucket?.items || [];
-  const status: string = bucket?.status || "idle";
+  const anagraficaBucket = useAppSelector((s: any) => s.anagrafiche?.byType?.[entityType]);
+  const aulaBucket = useAppSelector((s: any) => s.aule?.byType?.[entityType]);
+
+  const items = sourceKind === "anagrafiche"
+    ? ((anagraficaBucket?.items || []) as AnagraficaPreview[])
+    : ((aulaBucket?.items || []) as AulaPreview[]);
+  const status = sourceKind === "anagrafiche"
+    ? String(anagraficaBucket?.status || "idle")
+    : String(aulaBucket?.status || "idle");
 
   useEffect(() => {
     if (!open) return;
@@ -79,89 +111,99 @@ export default function RecipientPickerModal({ open, onClose, onPick }: Props) {
     setSelectedId("");
     setEmailChoice("");
     setSelecting(false);
+    setSourceKind("anagrafiche");
+    setEntityType((ANAGRAFICA_TYPES?.[0] as any)?.slug || "clienti");
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
 
     const t = setTimeout(() => {
+      if (sourceKind === "anagrafiche") {
+        dispatch(
+          fetchAnagrafiche({
+            type: entityType,
+            query: query.trim() || undefined,
+            page: 1,
+            pageSize: 20,
+          }) as any,
+        );
+        return;
+      }
+
       dispatch(
-        fetchAnagrafiche({
-          type: typeSlug,
+        fetchAuleByType({
+          type: entityType,
           query: query.trim() || undefined,
           page: 1,
           pageSize: 20,
-        }) as any
+        }) as any,
       );
     }, 250);
 
     return () => clearTimeout(t);
-  }, [open, typeSlug, query, dispatch]);
+  }, [open, sourceKind, entityType, query, dispatch]);
 
-  // ✅ opzioni per Select "serio"
+  const sourceOptions = useMemo(
+    () => [
+      ["anagrafiche", "Anagrafiche"],
+      ...(allowAule ? ([["aule", "Aule"]] as const) : []),
+    ],
+    [allowAule],
+  );
+
   const typeOptions = useMemo(() => {
-    return (ANAGRAFICA_TYPES || []).map((t: any) => [t.slug as string, t.label as string] as const);
-  }, []);
+    if (sourceKind === "anagrafiche") {
+      return (ANAGRAFICA_TYPES || []).map((t: any) => [t.slug as string, t.label as string] as const);
+    }
+    return (AULE_TYPES || []).map((t: any) => [t.slug as string, t.label as string] as const);
+  }, [sourceKind]);
 
-  async function selectItem(item: AnagraficaPreview) {
-    if (selecting) return;
+  useEffect(() => {
+    const firstType = sourceKind === "anagrafiche"
+      ? (ANAGRAFICA_TYPES?.[0] as any)?.slug || "clienti"
+      : (AULE_TYPES?.[0] as any)?.slug || "";
+    setEntityType(firstType);
+    setSelectedId("");
+  }, [sourceKind]);
 
+  async function selectAnagraficaItem(item: AnagraficaPreview) {
     const id = item.id;
-    setSelectedId(id);
-    setSelecting(true);
+    const label = getAnagraficaItemLabel(item);
+
+    const res = await dispatch(fetchAnagrafica({ type: entityType, id }) as any);
+    const full: AnagraficaFull | undefined = res?.payload?.data;
+    const anyFull = full as any;
 
     try {
-      const res = await dispatch(fetchAnagrafica({ type: typeSlug, id }) as any);
-      const full: AnagraficaFull | undefined = res?.payload?.data;
-      const anyFull = full as any;
+      const packRes = await jsonFetch<{ ok: true; pack: AnagraficaPack }>("/api/anagrafiche/pack", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ typeSlug: entityType, id }),
+      });
 
-      const label = getItemLabel(item);
+      const pack = packRes.pack;
+      const allEmails = Array.isArray(pack?.emails) ? pack.emails : [];
+      const rootData = pack?.root?.data && typeof pack.root.data === "object" ? pack.root.data : {};
+      const related = Array.isArray(pack?.related) ? pack.related : [];
 
-      // ✅ Tentativo 1: risolvi reference lato server (pack)
-      try {
-        const packRes = await jsonFetch<{ ok: true; pack: AnagraficaPack }>("/api/anagrafiche/pack", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ typeSlug, id }),
-        });
-
-        const pack = packRes.pack;
-        const allEmails = Array.isArray(pack?.emails) ? pack.emails : [];
-        const rootData = pack?.root?.data && typeof pack.root.data === "object" ? pack.root.data : {};
-        const related = Array.isArray(pack?.related) ? pack.related : [];
-
-        const draft: PickedRecipient = {
-          scope: "ANAGRAFICA",
-          typeSlug,
-          id,
-          label,
-          emails: allEmails.length ? [allEmails[0]] : [],
-          allEmails,
-          data: rootData,
-          related,
-        };
-
-        if (allEmails.length <= 1) {
-          onPick({ ...draft, emails: allEmails.length ? [allEmails[0]] : [] });
-          onClose();
-          return;
-        }
-
-        setPickedDraft(draft);
-        setEmailChoice(allEmails[0] || "");
-        setStep("chooseEmail");
-        return;
-      } catch {
-        // fallback sotto
-      }
-
-      // 🟡 Fallback 2: solo root.data
+      return {
+        sourceKind: "ANAGRAFICA" as const,
+        typeSlug: entityType,
+        id,
+        label,
+        emails: allEmails.length ? [allEmails[0]] : [],
+        allEmails,
+        data: rootData,
+        related,
+      };
+    } catch {
       const data = getDocData(anyFull);
       const emails = extractEmailsDeep(data);
 
-      const draft: PickedRecipient = {
-        scope: "ANAGRAFICA",
-        typeSlug,
+      return {
+        sourceKind: "ANAGRAFICA" as const,
+        typeSlug: entityType,
         id,
         label,
         emails,
@@ -169,15 +211,51 @@ export default function RecipientPickerModal({ open, onClose, onPick }: Props) {
         data,
         related: [],
       };
+    }
+  }
 
-      if (emails.length <= 1) {
-        onPick(draft);
+  async function selectAulaItem(item: AulaPreview) {
+    const id = item.id;
+    const label = getAulaItemLabel(item);
+
+    const res = await dispatch(fetchAulaById({ type: entityType, id }) as any);
+    const detail: AulaDetail | undefined = res?.payload as AulaDetail | undefined;
+    const emails = extractEmailsFromAulaDetail(detail);
+
+    return {
+      sourceKind: "AULA" as const,
+      typeSlug: entityType,
+      id,
+      label,
+      emails,
+      allEmails: emails,
+      data: detail?.campi || {},
+      related: [],
+    };
+  }
+
+  async function selectItem(item: AnagraficaPreview | AulaPreview) {
+    if (selecting) return;
+
+    const id = item.id;
+    setSelectedId(id);
+    setSelecting(true);
+
+    try {
+      const draft = sourceKind === "anagrafiche"
+        ? await selectAnagraficaItem(item as AnagraficaPreview)
+        : await selectAulaItem(item as AulaPreview);
+
+      const allEmails = draft.allEmails || draft.emails || [];
+
+      if (allEmails.length <= 1) {
+        onPick({ ...draft, emails: allEmails.length ? [allEmails[0]] : [] });
         onClose();
         return;
       }
 
       setPickedDraft(draft);
-      setEmailChoice(emails[0] || "");
+      setEmailChoice(allEmails[0] || "");
       setStep("chooseEmail");
     } finally {
       setSelecting(false);
@@ -188,30 +266,46 @@ export default function RecipientPickerModal({ open, onClose, onPick }: Props) {
     if (!pickedDraft) return;
     const chosen = emailChoice.trim();
     const finalEmails = chosen ? [chosen] : pickedDraft.emails;
-
     onPick({ ...pickedDraft, emails: finalEmails });
     onClose();
   }
+
+  const title = mode === "cc" ? "Aggiungi destinatario in copia" : "Seleziona destinatario";
+  const subtitle =
+    mode === "cc"
+      ? "Cerca nelle anagrafiche o nelle aule e aggiungi un indirizzo in CC."
+      : "Cerca nelle anagrafiche e compila automaticamente il destinatario principale.";
 
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title="Seleziona destinatario"
-      subtitle="Cerca nelle anagrafiche e compila automaticamente la mail."
+      title={title}
+      subtitle={subtitle}
       maxWidthClassName="max-w-[820px]"
       disableClose={false}
       zIndexClassName="z-[90]"
     >
       {step === "list" ? (
         <>
-          <div className="grid gap-3 md:grid-cols-[220px,1fr]">
-            {/* ✅ Select serio */}
+          <div className={cn("grid gap-3", allowAule ? "md:grid-cols-[180px,220px,1fr]" : "md:grid-cols-[220px,1fr]")}>
+            {allowAule ? (
+              <div className="text-sm">
+                <Select
+                  label="Sorgente"
+                  value={sourceKind}
+                  onChange={(v) => setSourceKind(v as SourceKind)}
+                  options={sourceOptions as any}
+                  disabled={selecting || status === "loading"}
+                />
+              </div>
+            ) : null}
+
             <div className="text-sm">
               <Select
                 label="Tipo"
-                value={typeSlug}
-                onChange={setTypeSlug}
+                value={entityType}
+                onChange={setEntityType}
                 options={typeOptions as any}
                 disabled={selecting || status === "loading"}
               />
@@ -222,12 +316,12 @@ export default function RecipientPickerModal({ open, onClose, onPick }: Props) {
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="nome, codice, email…"
+                placeholder={sourceKind === "anagrafiche" ? "nome, codice, email..." : "nome aula, indirizzo, email..."}
                 disabled={selecting}
                 className={cn(
                   "mt-1 w-full rounded-xl border border-stroke bg-transparent px-3 py-2 text-sm outline-none focus:border-primary",
                   "dark:border-dark-3 dark:text-white",
-                  selecting && "opacity-70"
+                  selecting && "opacity-70",
                 )}
               />
             </label>
@@ -237,7 +331,7 @@ export default function RecipientPickerModal({ open, onClose, onPick }: Props) {
             <div className="flex items-center justify-between border-b border-stroke px-3 py-2 text-xs dark:border-dark-3">
               <span className="font-semibold text-dark/80 dark:text-white/80">Risultati</span>
               <span className="text-dark/60 dark:text-white/60">
-                {selecting || status === "loading" ? "Caricamento…" : `${items.length} elementi`}
+                {selecting || status === "loading" ? "Caricamento..." : `${items.length} elementi`}
               </span>
             </div>
 
@@ -248,9 +342,11 @@ export default function RecipientPickerModal({ open, onClose, onPick }: Props) {
                 </div>
               ) : (
                 <ul className="space-y-2">
-                  {items.map((it) => {
+                  {items.map((it: any) => {
                     const active = it.id === selectedId;
-                    const label = getItemLabel(it);
+                    const label = sourceKind === "anagrafiche"
+                      ? getAnagraficaItemLabel(it as AnagraficaPreview)
+                      : getAulaItemLabel(it as AulaPreview);
 
                     return (
                       <li key={it.id}>
@@ -261,9 +357,9 @@ export default function RecipientPickerModal({ open, onClose, onPick }: Props) {
                             "w-full rounded-xl border px-3 py-3 text-left transition-colors",
                             "border-stroke dark:border-dark-3",
                             active
-                              ? "bg-red-100/60 border-primary dark:bg-red-900/30"
+                              ? "border-primary bg-red-100/60 dark:bg-red-900/30"
                               : "hover:bg-gray-2 dark:hover:bg-dark-2",
-                            selecting && "opacity-70 cursor-not-allowed"
+                            selecting && "cursor-not-allowed opacity-70",
                           )}
                         >
                           <div className="flex items-center justify-between gap-3">
@@ -272,7 +368,7 @@ export default function RecipientPickerModal({ open, onClose, onPick }: Props) {
                                 {label}
                               </div>
                               <div className="mt-0.5 truncate text-[11px] text-dark/60 dark:text-white/60">
-                                ID: <span className="font-mono">{it.id}</span>
+                                {sourceKind === "anagrafiche" ? "Scheda" : "Aula"}: <span className="font-mono">{it.id}</span>
                               </div>
                             </div>
 
@@ -288,33 +384,29 @@ export default function RecipientPickerModal({ open, onClose, onPick }: Props) {
               )}
             </div>
           </div>
-
-          <div className="mt-3 text-[11px] text-dark/60 dark:text-white/60">
-            Tip: se un’anagrafica ha più email (anche via reference), ti chiederò quale usare.
-          </div>
         </>
       ) : (
         <div className="rounded-xl border border-stroke p-3 dark:border-dark-3">
           <div className="text-sm font-semibold text-dark dark:text-white">
-            Questa anagrafica ha più email
+            Questo record ha piu email
           </div>
           <div className="mt-1 text-xs text-dark/60 dark:text-white/60">
-            Scegli quale indirizzo usare come destinatario.
+            Scegli quale indirizzo usare.
           </div>
 
           <div className="mt-3 space-y-2">
-            {(pickedDraft?.allEmails || pickedDraft?.emails || []).map((e) => (
+            {(pickedDraft?.allEmails || pickedDraft?.emails || []).map((email) => (
               <label
-                key={e}
+                key={email}
                 className="flex cursor-pointer items-center gap-2 rounded-xl border border-stroke px-3 py-2 text-sm dark:border-dark-3"
               >
                 <input
                   type="radio"
                   name="emailChoice"
-                  checked={emailChoice === e}
-                  onChange={() => setEmailChoice(e)}
+                  checked={emailChoice === email}
+                  onChange={() => setEmailChoice(email)}
                 />
-                <span className="font-mono">{e}</span>
+                <span className="font-mono">{email}</span>
               </label>
             ))}
           </div>

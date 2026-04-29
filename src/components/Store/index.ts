@@ -14,6 +14,7 @@ import azioniReducer from "@/components/Store/slices/azioniSlice";
 import notificheReducer from "@/components/Store/slices/notificheSlice";
 import statsReducer from "./slices/statsSlice";
 import financialsReducer from "@/components/Store/slices/financialsSlice";
+import confermeOrdineAnalyticsReducer from "@/components/Store/slices/confermeOrdineAnalyticsSlice";
 
 // ✅ UI slice
 import uiReducer, {
@@ -56,6 +57,7 @@ export const makeStore = () =>
       notifiche: notificheReducer,
       stats: statsReducer,
       financials: financialsReducer,
+      confermeOrdineAnalytics: confermeOrdineAnalyticsReducer,
 
       // ✅ UI
       ui: uiReducer,

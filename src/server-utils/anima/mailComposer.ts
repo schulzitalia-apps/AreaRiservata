@@ -47,6 +47,17 @@ type ComposeOutput = {
   };
 };
 
+const TECHNICAL_KEYS = new Set([
+  "__meta",
+  "_id",
+  "__v",
+  "createdAt",
+  "updatedAt",
+  "owner",
+  "visibility",
+  "visibleTo",
+]);
+
 const { MONGODB_URI } = process.env;
 
 async function ensureDb() {
@@ -68,6 +79,70 @@ function extractFirstJsonObject(text: string): string | null {
     if (depth === 0) return s.slice(start, i + 1);
   }
   return null;
+}
+
+function isPlainObject(value: unknown): value is Record<string, any> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function sanitizeComposeValue(value: any, depth: number): any {
+  if (depth < 0) return undefined;
+  if (value == null) return undefined;
+
+  if (["string", "number", "boolean"].includes(typeof value)) {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      return trimmed ? trimmed : undefined;
+    }
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    const cleaned = value
+      .map((item) => sanitizeComposeValue(item, depth - 1))
+      .filter((item) => item !== undefined);
+    return cleaned.length ? cleaned.slice(0, 6) : undefined;
+  }
+
+  if (!isPlainObject(value)) return undefined;
+
+  const out: Record<string, any> = {};
+  for (const key of Object.keys(value)) {
+    if (TECHNICAL_KEYS.has(key)) continue;
+    const cleaned = sanitizeComposeValue(value[key], depth - 1);
+    if (cleaned !== undefined) out[key] = cleaned;
+  }
+
+  return Object.keys(out).length ? out : undefined;
+}
+
+function sanitizeComposeVars(vars?: Record<string, any>) {
+  if (!vars || !isPlainObject(vars)) return {};
+  return (sanitizeComposeValue(vars, 4) ?? {}) as Record<string, any>;
+}
+
+function sanitizeComposePack(pack: AnagraficaPack | null) {
+  if (!pack) return null;
+
+  const rootData = (sanitizeComposeValue(pack.root?.data, 3) ?? {}) as Record<string, any>;
+  const related = (pack.related || [])
+    .map((node) => ({
+      typeSlug: node.typeSlug,
+      id: node.id,
+      data: (sanitizeComposeValue(node.data, 2) ?? {}) as Record<string, any>,
+    }))
+    .filter((node) => Object.keys(node.data).length > 0)
+    .slice(0, 4);
+
+  return {
+    root: {
+      typeSlug: pack.root.typeSlug,
+      id: pack.root.id,
+      data: rootData,
+    },
+    related,
+    emails: (pack.emails || []).slice(0, 6),
+  };
 }
 
 async function callLlmForDraft(args: {
@@ -135,8 +210,8 @@ Campi:
       subject: args.templateSubject,
       html: args.templateHtml,
     },
-    currentVars: args.currentVars ?? {},
-    anagraficaPack: args.anagraficaPack ?? null,
+    currentVars: sanitizeComposeVars(args.currentVars),
+    anagraficaPack: sanitizeComposePack(args.anagraficaPack ?? null),
     userGoal: args.userGoal ?? "",
   };
 

@@ -11,6 +11,7 @@ export type StatoAvanzamento = string;
 
 export type ValueSums = {
   valore: number;
+  count: number;
 };
 
 export type MonthRow = {
@@ -312,6 +313,7 @@ export async function getConfermeOrdineAnalytics(params: {
             $group: {
               _id: { month: "$__month", variantId: "$__variantId" },
               valore: { $sum: "$__valore" },
+              count: { $sum: 1 },
             },
           },
           { $sort: { "_id.month": 1, "_id.variantId": 1 } },
@@ -320,7 +322,10 @@ export async function getConfermeOrdineAnalytics(params: {
               _id: 0,
               month: "$_id.month",
               variantId: "$_id.variantId",
-              sums: { valore: { $round: ["$valore", 0] } },
+              sums: {
+                valore: { $round: ["$valore", 0] },
+                count: "$count",
+              },
             },
           },
         ],
@@ -456,18 +461,22 @@ export async function getConfermeOrdineAnalytics(params: {
     const vid = safeStr((row as any).variantId);
     if (!m || !vid) continue;
 
-    const sums: ValueSums = { valore: Math.round(safeNum((row as any).sums?.valore)) };
+    const sums: ValueSums = {
+      valore: Math.round(safeNum((row as any).sums?.valore)),
+      count: Math.max(0, Math.round(safeNum((row as any).sums?.count))),
+    };
 
     const existing =
       monthMap.get(m) ??
       ({
         month: m,
         byVariantId: {},
-        totals: { valore: 0 },
+        totals: { valore: 0, count: 0 },
       } as MonthRow);
 
     existing.byVariantId[vid] = sums;
     existing.totals.valore += sums.valore;
+    existing.totals.count += sums.count;
 
     monthMap.set(m, existing);
   }
@@ -484,7 +493,7 @@ export async function getConfermeOrdineAnalytics(params: {
         ({
           month: mk,
           byVariantId: {},
-          totals: { valore: 0 },
+          totals: { valore: 0, count: 0 },
         } as MonthRow);
       months.push(existing);
       cursor = addMonthsUTC(cursor, 1);

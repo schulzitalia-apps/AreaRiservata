@@ -12,34 +12,38 @@ export function CategoryTabsDyn(props: {
   const { value, onChange, items } = props;
 
   return (
-    <div className="flex flex-wrap gap-2">
-      {items.map((it) => {
-        const active = it.key === value;
-        return (
-          <button
-            key={it.key}
-            type="button"
-            onClick={() => onChange(it.key)}
-            className={cn(
-              "rounded-full border px-3 py-1 text-xs font-extrabold transition",
-              active
-                ? "border-primary/35 bg-primary/10 text-primary"
-                : "border-stroke bg-white/60 text-gray-700 hover:bg-white dark:border-dark-3 dark:bg-gray-dark/40 dark:text-white/80 dark:hover:bg-dark-2",
-            )}
-            title={it.label}
-          >
-            <span className="inline-flex items-center gap-2">
-              {it.key !== "all" ? (
-                <span
-                  className="h-2 w-2 rounded-full"
-                  style={{ background: it.color || "#5750F1" }}
-                />
-              ) : null}
-              {it.label}
-            </span>
-          </button>
-        );
-      })}
+    <div className="rounded-2xl border border-stroke/70 bg-white/35 p-3 shadow-sm shadow-black/5 dark:border-dark-3/70 dark:bg-gray-dark/20">
+      <div className="max-h-[116px] overflow-auto pr-1 [scrollbar-width:thin]">
+        <div className="flex flex-wrap gap-2">
+          {items.map((it) => {
+            const active = it.key === value;
+            return (
+              <button
+                key={it.key}
+                type="button"
+                onClick={() => onChange(it.key)}
+                className={cn(
+                  "rounded-full border px-3 py-1 text-xs font-extrabold transition",
+                  active
+                    ? "border-primary/35 bg-primary/10 text-primary"
+                    : "border-stroke bg-white/60 text-gray-700 hover:bg-white dark:border-dark-3 dark:bg-gray-dark/40 dark:text-white/80 dark:hover:bg-dark-2",
+                )}
+                title={it.label}
+              >
+                <span className="inline-flex items-center gap-2">
+                  {it.key !== "all" ? (
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ background: it.color || "#5750F1" }}
+                    />
+                  ) : null}
+                  {it.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

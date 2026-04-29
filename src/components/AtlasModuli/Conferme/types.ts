@@ -7,6 +7,7 @@ export type CatKey = "all" | string;
 
 export type ValueSums = {
   valore: number; // valoreCommessa
+  count: number;
 };
 
 export type MonthRow = {

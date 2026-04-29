@@ -10,6 +10,8 @@ import {
   selectConfermeOrdineAnalyticsSticky,
 } from "@/components/Store/slices/confermeOrdineAnalyticsSlice";
 
+const STALE_AFTER_MS = 5 * 60 * 1000;
+
 export function useConfermeOrdineAnalyticsSource(timeKey: TimeKey) {
   const dispatch = useAppDispatch();
 
@@ -34,12 +36,28 @@ export function useConfermeOrdineAnalyticsSource(timeKey: TimeKey) {
     selectConfermeOrdineAnalyticsSticky(state, { monthsBack }),
   );
 
+  const isStale = useMemo(() => {
+    const updatedAt = analyticsEntry?.updatedAt;
+    if (!updatedAt) return true;
+
+    const ts = new Date(updatedAt).getTime();
+    if (!Number.isFinite(ts)) return true;
+
+    return Date.now() - ts > STALE_AFTER_MS;
+  }, [analyticsEntry?.updatedAt]);
+
   useEffect(() => {
     if (analyticsEntry?.status === "loading") return;
-    if (analyticsEntry?.status === "succeeded") return;
+
+    const shouldFetch =
+      !analyticsEntry ||
+      analyticsEntry.status === "idle" ||
+      (analyticsEntry.status === "succeeded" && isStale);
+
+    if (!shouldFetch) return;
 
     dispatch(fetchConfermeOrdineAnalytics({ monthsBack }));
-  }, [monthsBack, dispatch]); // niente analyticsEntry per evitare loop
+  }, [monthsBack, dispatch, analyticsEntry, isStale]);
 
   return {
     monthsBack,

@@ -3,6 +3,7 @@ import { Resend } from "resend";
 
 export type SendEmailParams = {
   to: string[];
+  cc?: string[];
   subject: string;
   html: string;
   replyTo?: string | null;
@@ -26,6 +27,7 @@ export async function sendEmail(params: SendEmailParams) {
   const result = await resend.emails.send({
     from,
     to: params.to,
+    ...(params.cc?.length ? { cc: params.cc } : {}),
     subject: params.subject,
     html: params.html,
     ...(replyTo ? { replyTo } : {}),

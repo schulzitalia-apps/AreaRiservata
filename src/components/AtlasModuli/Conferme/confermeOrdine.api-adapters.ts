@@ -4,6 +4,7 @@ import type { DonutDatum } from "@/components/Charts/ui/ApexDonutChart";
 import type { BarSeries } from "@/components/Charts/ui/ApexBarChart";
 import type { TimeKey, CatKey, ConfermeOrdineAnalyticsResponse, StatusBreakdownRow } from "./types";
 import type { CategoryMeta } from "./confermeOrdine.category";
+import type { TxnRow } from "./ui";
 import {
   isoMonthLabel,
   safeNum,
@@ -72,21 +73,24 @@ function splitPrevCurrentMonths(
 
 function sumTotalsFromMonths(months: any[]) {
   let valore = 0;
+  let count = 0;
 
   for (const row of months) {
     const totals = row?.totals;
     if (totals) {
       valore += safeNum(totals.valore);
+      count += safeNum(totals.count);
       continue;
     }
 
     const byKey = row?.byVariantId || {};
     for (const k of Object.keys(byKey)) {
       valore += safeNum(byKey[k]?.valore);
+      count += safeNum(byKey[k]?.count);
     }
   }
 
-  return { valore: Math.round(valore) };
+  return { valore: Math.round(valore), count: Math.round(count) };
 }
 
 function sumByKeyFromMonths(months: any[]): Record<string, number> {
@@ -96,6 +100,18 @@ function sumByKeyFromMonths(months: any[]): Record<string, number> {
     for (const k of Object.keys(byKey)) {
       const kk = safeStr(k);
       acc[kk] = (acc[kk] ?? 0) + safeNum(byKey[k]?.valore);
+    }
+  }
+  return acc;
+}
+
+function sumCountByKeyFromMonths(months: any[]): Record<string, number> {
+  const acc: Record<string, number> = {};
+  for (const row of months) {
+    const byKey = row?.byVariantId || {};
+    for (const k of Object.keys(byKey)) {
+      const kk = safeStr(k);
+      acc[kk] = (acc[kk] ?? 0) + safeNum(byKey[k]?.count);
     }
   }
   return acc;
@@ -275,13 +291,13 @@ function dateLabelFromIso(iso: string | null | undefined) {
 export function buildUpcomingFromApi(args: {
   apiData?: ConfermeOrdineAnalyticsResponse;
   timeKey: TimeKey;
-}): Array<{ title: string; dateLabel: string; amount: number; iso: string }> {
+}): Array<{ title: string; customer: string; dateLabel: string; amount: number; iso: string }> {
   if (!args.apiData) return [];
 
   const bucket = (args.apiData as any).top?.upcoming || {};
   const maxTs = endOfCurrentWindowPlus2Months({ apiData: args.apiData, timeKey: args.timeKey });
 
-  const out: Array<{ title: string; dateLabel: string; amount: number; iso: string }> = [];
+  const out: Array<{ title: string; customer: string; dateLabel: string; amount: number; iso: string }> = [];
 
   for (const k of Object.keys(bucket)) {
     const arr = Array.isArray(bucket?.[k]) ? bucket[k] : [];
@@ -295,13 +311,100 @@ export function buildUpcomingFromApi(args: {
       if (d.getTime() > maxTs) continue;
 
       const title = safeStr(x?.riferimento) || safeStr(x?.numeroOrdine) || "Consegna";
+      const customer = safeStr(k) || "Cliente";
       const amount = Math.round(safeNum(x?.valore ?? x?.valoreCommessa ?? 0));
 
-      out.push({ title, amount, iso, dateLabel: dateLabelFromIso(iso) });
+      out.push({ title, customer, amount, iso, dateLabel: dateLabelFromIso(iso) });
     }
   }
 
   return out.sort((a, b) => new Date(a.iso).getTime() - new Date(b.iso).getTime()).slice(0, 200);
+}
+
+export function buildTopValueFromApi(args: {
+  apiData?: ConfermeOrdineAnalyticsResponse;
+  catKey: CatKey;
+}): TxnRow[] {
+  if (!args.apiData) return [];
+
+  const bucket = (args.apiData as any).top?.topValue || {};
+  const selected = String(args.catKey);
+
+  const groups =
+    selected === "all"
+      ? Object.entries(bucket)
+      : [[selected, Array.isArray(bucket?.[selected]) ? bucket[selected] : []]];
+
+  const rows: TxnRow[] = [];
+
+  for (const [category, items] of groups) {
+    for (const item of Array.isArray(items) ? items : []) {
+      rows.push({
+        id: safeStr(item?.id) || `${safeStr(category)}-${safeStr(item?.numeroOrdine)}`,
+        title:
+          safeStr(item?.riferimento) ||
+          safeStr(item?.numeroOrdine) ||
+          "Conferma d'ordine",
+        supplier: safeStr(category) || "—",
+        dateLabel: dateLabelFromIso(item?.effectiveDate ?? item?.inizioConsegna ?? item?.fineConsegna),
+        amount: Math.round(safeNum(item?.valore ?? item?.valoreCommessa ?? 0)),
+        category: safeStr(category),
+      });
+    }
+  }
+
+  return rows
+    .sort((a, b) => b.amount - a.amount || a.title.localeCompare(b.title))
+    .slice(0, 5);
+}
+
+export function buildCustomerOrderCountRankingFromApi(args: {
+  apiData?: ConfermeOrdineAnalyticsResponse;
+  timeKey: TimeKey;
+  categoryMetaLike: CategoryMeta;
+}): Array<{ label: string; value: number }> {
+  if (!args.apiData) return [];
+
+  const { current } = splitPrevCurrentMonths(args.apiData, args.timeKey);
+  const universe = universeFromAnalytics(args.apiData);
+  const sumByKey = sumCountByKeyFromMonths(current);
+
+  return universe
+    .map((k) => ({
+      label: args.categoryMetaLike?.[k]?.label ?? k,
+      value: Math.round(safeNum(sumByKey[k])),
+    }))
+    .filter((item) => item.value > 0)
+    .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
+}
+
+export function buildCustomerValuePerOrderRankingFromApi(args: {
+  apiData?: ConfermeOrdineAnalyticsResponse;
+  timeKey: TimeKey;
+  categoryMetaLike: CategoryMeta;
+}): Array<{ label: string; value: number; count: number; total: number }> {
+  if (!args.apiData) return [];
+
+  const { current } = splitPrevCurrentMonths(args.apiData, args.timeKey);
+  const universe = universeFromAnalytics(args.apiData);
+  const valueByKey = sumByKeyFromMonths(current);
+  const countByKey = sumCountByKeyFromMonths(current);
+
+  return universe
+    .map((k) => {
+      const total = Math.round(safeNum(valueByKey[k]));
+      const count = Math.round(safeNum(countByKey[k]));
+      const value = count > 0 ? Math.round(total / count) : 0;
+
+      return {
+        label: args.categoryMetaLike?.[k]?.label ?? k,
+        value,
+        count,
+        total,
+      };
+    })
+    .filter((item) => item.count > 0)
+    .sort((a, b) => b.count - a.count || b.value - a.value || b.total - a.total || a.label.localeCompare(b.label));
 }
 
 /* ---------------------------

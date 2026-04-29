@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { cn } from "@/server-utils/lib/utils";
 
 export type MailEventAutoConfig = {
@@ -32,8 +33,6 @@ export type MailTemplateLite = {
   name: string;
   subject: string;
   description?: string;
-
-  // ✅ IMPORTANTISSIMO: il client deve riceverlo dal bootstrap
   eventAuto?: MailEventAutoConfig;
 };
 
@@ -44,66 +43,67 @@ type Props = {
   className?: string;
 };
 
-export default function TemplateList({ items, selectedKey, onSelect, className }: Props) {
+export default function TemplateList(props: Props) {
+  const [query, setQuery] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return props.items;
+
+    return props.items.filter((item) =>
+      `${item.name} ${item.key} ${item.subject} ${item.description || ""}`
+        .toLowerCase()
+        .includes(q),
+    );
+  }, [props.items, query]);
+
   return (
     <aside
       className={cn(
-        "w-full max-w-[22rem] border-l-2 border-stroke dark:border-dark-3",
-        "bg-white dark:bg-gray-dark",
-        className
+        "w-full max-w-[22rem] border-l border-stroke/80 bg-white dark:border-dark-3/80 dark:bg-gray-dark",
+        props.className,
       )}
     >
-      <div className="px-6 py-4 border-b-2 border-stroke dark:border-dark-3">
-        <h3 className="text-xl font-bold text-dark dark:text-white">Template</h3>
-        <div className="mt-1 text-xs text-dark/60 dark:text-white/60">Seleziona un template per comporre l’email</div>
+      <div className="border-b border-stroke/80 px-4 py-4 dark:border-dark-3/80">
+        <div className="text-base font-semibold text-dark dark:text-white">Template</div>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Cerca template..."
+          className="mt-3 w-full rounded-xl border border-stroke bg-white px-3 py-2 text-sm text-dark outline-none transition focus:border-primary dark:border-dark-3 dark:bg-black/20 dark:text-white"
+        />
       </div>
 
-      <ul className="custom-scrollbar max-h-[calc(100vh-240px)] overflow-y-auto p-4 space-y-3">
-        {items.map((t) => {
-          const hasAutoEvent = !!t.eventAuto?.enabled;
+      <ul className="max-h-[calc(100vh-230px)] space-y-2 overflow-y-auto p-4">
+        {filtered.map((template) => {
+          const isSelected = props.selectedKey === template.key;
 
           return (
-            <li key={t.key}>
+            <li key={template.key}>
               <button
-                onClick={() => onSelect(t.key)}
+                onClick={() => props.onSelect(template.key)}
                 className={cn(
-                  "flex w-full flex-col gap-1 rounded-2xl border-2 px-4 py-3 text-left transition-colors",
-                  "border-stroke dark:border-dark-3",
-                  selectedKey === t.key
-                    ? "bg-red-100/60 border-primary dark:bg-red-900/30"
-                    : "hover:bg-gray-2 dark:hover:bg-neutral-900"
+                  "w-full rounded-xl border px-3 py-3 text-left transition",
+                  "border-stroke/80 bg-white hover:bg-gray-1 dark:border-dark-3/80 dark:bg-transparent dark:hover:bg-dark-2/60",
+                  isSelected && "border-primary bg-primary/5",
                 )}
               >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="truncate text-base font-semibold text-dark dark:text-white">{t.name}</span>
-
-                  {hasAutoEvent ? (
-                    <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary dark:text-red-400">
-                      AUTOEVENT
-                    </span>
-                  ) : null}
+                <div className="truncate text-sm font-semibold text-dark dark:text-white">
+                  {template.name}
                 </div>
-
-                <span className="truncate text-xs text-dark/70 dark:text-white/70 font-mono">{t.key}</span>
-                <span className="truncate text-xs text-dark/70 dark:text-white/70">Oggetto: {t.subject}</span>
-
-                {!!t.description && (
-                  <span className="truncate text-xs text-dark/60 dark:text-white/60">{t.description}</span>
-                )}
-
-                {hasAutoEvent ? (
-                  <span className="truncate text-[11px] text-dark/60 dark:text-white/60">
-                    Evento: <span className="font-mono">{t.eventAuto?.eventoType || "—"}</span>
-                  </span>
-                ) : null}
+                <div className="mt-1 truncate text-xs text-dark/60 dark:text-white/60">
+                  {template.subject}
+                </div>
               </button>
             </li>
           );
         })}
 
-        {items.length === 0 && (
-          <li className="py-6 text-center text-xs text-dark/60 dark:text-white/60">Nessun template disponibile.</li>
-        )}
+        {filtered.length === 0 ? (
+          <li className="rounded-xl border border-dashed border-stroke/80 px-3 py-6 text-center text-sm text-dark/60 dark:border-dark-3/80 dark:text-white/60">
+            Nessun template trovato.
+          </li>
+        ) : null}
       </ul>
     </aside>
   );

@@ -1,100 +1,70 @@
 "use client";
 
 import { cn } from "@/server-utils/lib/utils";
-import { useMemo } from "react";
 
 type Props = {
   templateKey: string;
-
   subject: string;
   bodyText: string;
-
   hint?: string;
-
   onChangeSubject: (v: string) => void;
   onChangeBodyText: (v: string) => void;
-
   disabled?: boolean;
 };
 
-export default function MailPreview({
-                                      templateKey,
-                                      subject,
-                                      bodyText,
-                                      hint,
-                                      onChangeSubject,
-                                      onChangeBodyText,
-                                      disabled,
-                                    }: Props) {
-  const hasPreview = !!subject || !!bodyText;
-
-  const disabledFinal = !!disabled;
-
-  const badge = useMemo(() => {
-    if (!hasPreview) return "—";
-    return "EDITABILE";
-  }, [hasPreview]);
+export default function MailPreview(props: Props) {
+  const hasContent = !!props.subject || !!props.bodyText;
 
   return (
-    <div className="rounded-lg border border-stroke p-4 dark:border-dark-3">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="font-semibold text-dark dark:text-white">Anteprima</div>
-          <div className="mt-0.5 text-xs text-dark/60 dark:text-white/60">
-            Template: <span className="font-mono">{templateKey || "—"}</span>{" "}
-            <span className="ml-2 rounded-full bg-gray-2 px-2 py-0.5 text-[11px] font-semibold text-dark dark:bg-dark-2 dark:text-white">
-              {badge}
-            </span>
+    <div className="rounded-2xl border border-stroke/80 bg-white p-4 dark:border-dark-3/80 dark:bg-gray-dark">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <div className="text-base font-semibold text-dark dark:text-white">Testo mail</div>
+          <div className="mt-1 text-xs text-dark/60 dark:text-white/60">
+            Template: <span className="font-mono">{props.templateKey || "-"}</span>
           </div>
         </div>
       </div>
 
-      {!hasPreview ? (
-        <div className="rounded-md bg-gray-1/40 p-4 text-sm text-dark/70 dark:bg-dark-2/50 dark:text-white/70">
-          {hint || "Nessuna anteprima disponibile."}
+      {!hasContent ? (
+        <div className="rounded-xl border border-dashed border-stroke/80 px-4 py-8 text-sm text-dark/60 dark:border-dark-3/80 dark:text-white/60">
+          {props.hint || "Nessun contenuto disponibile."}
         </div>
       ) : (
-        <div className="space-y-3">
-          <div className="rounded-md border border-stroke p-3 dark:border-dark-3">
-            <div className="text-[11px] font-semibold text-dark/70 dark:text-white/70">Oggetto</div>
-
+        <div className="space-y-4">
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-dark dark:text-white">
+              Oggetto
+            </label>
             <input
-              value={subject || ""}
-              disabled={disabledFinal}
-              onChange={(e) => onChangeSubject(e.target.value)}
+              value={props.subject || ""}
+              disabled={props.disabled}
+              onChange={(e) => props.onChangeSubject(e.target.value)}
               className={cn(
-                "mt-2 w-full rounded-xl border border-stroke bg-transparent px-3 py-2 text-sm text-dark outline-none focus:border-primary",
-                "dark:border-dark-3 dark:text-white",
-                disabledFinal && "opacity-60 cursor-not-allowed"
+                "w-full rounded-xl border border-stroke bg-white px-4 py-3 text-sm text-dark outline-none transition focus:border-primary",
+                "dark:border-dark-3 dark:bg-black/20 dark:text-white",
+                props.disabled && "opacity-60",
               )}
-              placeholder="Oggetto email…"
+              placeholder="Oggetto email..."
             />
           </div>
 
-          <div className="rounded-md border border-stroke p-3 dark:border-dark-3">
-            <div className="mb-2 flex items-center justify-between">
-              <div className="text-[11px] font-semibold text-dark/70 dark:text-white/70">Corpo email</div>
-              <div className="text-[11px] text-dark/50 dark:text-white/50">
-                Scrivi qui dentro: questa è la bozza che verrà inviata.
-              </div>
-            </div>
-
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-dark dark:text-white">
+              Corpo
+            </label>
             <textarea
-              value={bodyText || ""}
-              disabled={disabledFinal}
-              onChange={(e) => onChangeBodyText(e.target.value)}
+              value={props.bodyText || ""}
+              disabled={props.disabled}
+              onChange={(e) => props.onChangeBodyText(e.target.value)}
               className={cn(
-                "min-h-[220px] w-full rounded-xl border border-stroke bg-transparent px-3 py-2 text-[13px] leading-6 text-dark outline-none focus:border-primary",
-                "dark:border-dark-3 dark:text-white",
-                disabledFinal && "opacity-60 cursor-not-allowed"
+                "min-h-[460px] w-full resize-y rounded-xl border border-stroke bg-white px-4 py-3 text-sm leading-7 text-dark outline-none transition focus:border-primary xl:min-h-[540px]",
+                "dark:border-dark-3 dark:bg-black/20 dark:text-white",
+                props.disabled && "opacity-60",
               )}
-              placeholder="Testo email…"
+              placeholder="Scrivi il testo della mail..."
               spellCheck={false}
             />
-
-            <div className="mt-2 text-[11px] text-dark/60 dark:text-white/60">
-              (Il testo verrà convertito in HTML semplice: paragrafi + a capo.)
-            </div>
           </div>
         </div>
       )}

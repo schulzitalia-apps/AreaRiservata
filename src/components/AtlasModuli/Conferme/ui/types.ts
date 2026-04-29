@@ -2,6 +2,7 @@ export type CatKey = "all" | string;
 
 export type UpcomingRow = {
   title: string;
+  customer?: string;
   dateLabel: string;
   amount: number;
 };
