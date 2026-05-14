@@ -24,15 +24,23 @@ export async function POST(req: NextRequest) {
   await connectToDatabase();
 
   const tokenHash = hashInviteToken(token);
+  const consumedAt = new Date();
 
-  // Qui NON richiediamo usedAt assente perché:
-  // - in /consume lo settiamo già
-  // - quindi basta che tokenHash+_id matchino e non sia scaduto
-  const inv = await InvitationModel.findOne({
-    _id: inviteId,
-    tokenHash,
-    expiresAt: { $gt: new Date() },
-  });
+  // L'invito viene consumato solo quando la password viene salvata davvero.
+  const inv = await InvitationModel.findOneAndUpdate(
+    {
+      _id: inviteId,
+      tokenHash,
+      expiresAt: { $gt: new Date() },
+      $or: [{ usedAt: { $exists: false } }, { usedAt: null }],
+    },
+    {
+      $set: { usedAt: consumedAt },
+    },
+    {
+      new: true,
+    },
+  );
 
   if (!inv) {
     return NextResponse.json({ message: "Invito non valido o scaduto" }, { status: 400 });
@@ -43,9 +51,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: "Utente non trovato" }, { status: 404 });
   }
 
-  user.password = password; // verrà hashata dal pre-save
-  user.approved = true;
-  await user.save();
+  try {
+    user.password = password; // verra' hashata dal pre-save
+    user.approved = true;
+    await user.save();
+  } catch (error) {
+    await InvitationModel.updateOne(
+      { _id: inv._id, usedAt: consumedAt },
+      { $unset: { usedAt: 1 } },
+    ).catch(() => null);
+    throw error;
+  }
 
   return NextResponse.json({ ok: true }, { status: 200 });
 }

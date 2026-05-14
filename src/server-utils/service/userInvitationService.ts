@@ -145,7 +145,9 @@ export async function createOrRegenerateInvitation(
     createdBy: input.createdByUserId ?? undefined,
   });
 
-  const inviteLink = `${input.baseUrl}/invito?token=${token}`;
+  const inviteUrl = new URL("/invito", `${input.baseUrl}/`);
+  inviteUrl.searchParams.set("token", token);
+  const inviteLink = inviteUrl.toString();
 
   let mailSent = false;
   let messageId: string | null = null;

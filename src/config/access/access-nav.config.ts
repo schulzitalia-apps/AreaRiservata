@@ -238,7 +238,7 @@ export const NavItemsAccess: NavItemAccess[] = [
       "Custcare",
     ],
     perSlugRoles: {
-      clienti: ["Super", "Amministrazione", "Commerciale", "Agente"],
+      clienti: ["Super", "Amministrazione", "Commerciale", "Agente", "Custcare"],
       "conferme-ordine": ["Super", "Amministrazione", "Commerciale", "Custcare", "Agente", "Cliente"],
       corsi: ["Super", "Amministrazione", "Cliente"]
     },

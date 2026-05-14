@@ -183,16 +183,21 @@ export default function RecipientPickerModal({
       });
 
       const pack = packRes.pack;
-      const allEmails = Array.isArray(pack?.emails) ? pack.emails : [];
       const rootData = pack?.root?.data && typeof pack.root.data === "object" ? pack.root.data : {};
       const related = Array.isArray(pack?.related) ? pack.related : [];
+      const rootEmails = extractEmailsDeep(rootData);
+      const allEmails = Array.from(new Set([
+        ...rootEmails,
+        ...(Array.isArray(pack?.emails) ? pack.emails : []),
+      ]));
+      const primaryEmail = rootEmails[0] || allEmails[0] || "";
 
       return {
         sourceKind: "ANAGRAFICA" as const,
         typeSlug: entityType,
         id,
         label,
-        emails: allEmails.length ? [allEmails[0]] : [],
+        emails: primaryEmail ? [primaryEmail] : [],
         allEmails,
         data: rootData,
         related,

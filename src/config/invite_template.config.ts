@@ -214,8 +214,10 @@ export const inviteEmailTemplateConfig: InviteEmailTemplateConfig = {
             <p style="margin: 0 0 8px; font-size: 12px; line-height: 1.7; color: #6b7280;">
               ${inviteEmailTemplateConfig.directLinkLabelText}
             </p>
-            <p style="margin: 0; word-break: break-all; font-family: monospace; font-size: 12px; line-height: 1.7; color: #4b5563;">
-              ${inviteLink}
+            <p style="margin: 0; word-break: break-all; font-family: monospace; font-size: 12px; line-height: 1.7;">
+              <a href="${inviteLink}" target="_blank" rel="noreferrer" style="color: #4b5563; text-decoration: underline;">
+                ${inviteLink}
+              </a>
             </p>
           </div>
         </div>

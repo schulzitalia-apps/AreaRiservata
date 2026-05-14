@@ -33,6 +33,7 @@ type ComposeOutput = {
   template: {
     key: string;
     name: string;
+    description?: string;
     subject: string;
     html: string;
   };
@@ -48,7 +49,6 @@ type ComposeOutput = {
 };
 
 const TECHNICAL_KEYS = new Set([
-  "__meta",
   "_id",
   "__v",
   "createdAt",
@@ -147,8 +147,12 @@ function sanitizeComposePack(pack: AnagraficaPack | null) {
 
 async function callLlmForDraft(args: {
   templateKey: string;
+  templateName: string;
+  templateDescription?: string;
   templateSubject: string;
   templateHtml: string;
+  templateRenderedSubject: string;
+  templateRenderedHtml: string;
   currentVars?: Record<string, any>;
   anagraficaPack?: AnagraficaPack | null;
   userGoal?: string;
@@ -207,8 +211,12 @@ Campi:
   const payload = {
     templateKey: args.templateKey,
     template: {
+      name: args.templateName,
+      description: args.templateDescription ?? "",
       subject: args.templateSubject,
       html: args.templateHtml,
+      renderedSubject: args.templateRenderedSubject,
+      renderedHtml: args.templateRenderedHtml,
     },
     currentVars: sanitizeComposeVars(args.currentVars),
     anagraficaPack: sanitizeComposePack(args.anagraficaPack ?? null),
@@ -304,6 +312,8 @@ export async function composeMailWithLlm(
   if (!template) throw new Error("TEMPLATE_NOT_FOUND_OR_DISABLED");
 
   const baseVars = input.currentVars ?? {};
+  const renderedTemplateSubject = renderTemplate(template.subject, baseVars) || template.subject;
+  const renderedTemplateHtml = renderTemplate(template.html, baseVars) || template.html;
 
   // ✅ pack anagrafica (root + reference + emails)
   let anagraficaPack: AnagraficaPack | null = null;
@@ -315,8 +325,12 @@ export async function composeMailWithLlm(
   try {
     const draft = await callLlmForDraft({
       templateKey: template.key,
+      templateName: template.name,
+      templateDescription: template.description,
       templateSubject: template.subject,
       templateHtml: template.html,
+      templateRenderedSubject: renderedTemplateSubject,
+      templateRenderedHtml: renderedTemplateHtml,
       currentVars: baseVars,
       anagraficaPack,
       userGoal: input.userGoal,
@@ -333,6 +347,7 @@ export async function composeMailWithLlm(
       template: {
         key: template.key,
         name: template.name,
+        description: template.description,
         subject: template.subject,
         html: template.html,
       },
@@ -349,15 +364,12 @@ export async function composeMailWithLlm(
     };
   } catch (e) {
     // ✅ 2) fallback: renderTemplate
-    const subjectTpl = template.subject;
-    const renderedSubject = renderTemplate(subjectTpl, baseVars) || subjectTpl;
-    const renderedHtml = renderTemplate(template.html, baseVars) || template.html;
-
     return {
       ok: true,
       template: {
         key: template.key,
         name: template.name,
+        description: template.description,
         subject: template.subject,
         html: template.html,
       },
@@ -365,8 +377,8 @@ export async function composeMailWithLlm(
         vars: baseVars,
       },
       rendered: {
-        subject: renderedSubject,
-        html: renderedHtml,
+        subject: renderedTemplateSubject,
+        html: renderedTemplateHtml,
       },
       provider: runtimeSelection.provider,
     };

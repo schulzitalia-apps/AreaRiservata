@@ -22,6 +22,7 @@ const PRIORITY_KEYS = [
   "nome",
   "cognome",
   "denominazione",
+  "numeroCommessa",
   "email",
   "telefono",
   "cellulare",
@@ -46,6 +47,18 @@ const TECHNICAL_KEYS = new Set([
   "owner",
   "visibility",
   "visibleTo",
+]);
+
+const RESERVED_TOP_LEVEL_KEYS = new Set([
+  "recipient",
+  "anagrafica",
+  "message",
+  "subject",
+  "html",
+  "bodyText",
+  "signatureName",
+  "template",
+  "currentVars",
 ]);
 
 function isPlainObject(value: unknown): value is Record<string, any> {
@@ -101,7 +114,7 @@ function orderKeys(keys: string[]) {
 
 export function sanitizeMailData(
   data: Record<string, any> | undefined,
-  maxFields = 10,
+  maxFields = 24,
 ) {
   if (!isPlainObject(data)) return {};
 
@@ -120,6 +133,87 @@ export function sanitizeMailData(
   return out;
 }
 
+function sanitizeTemplateValue(value: any, depth: number): any {
+  if (depth < 0 || value == null) return undefined;
+
+  if (isPrimitive(value)) {
+    return isNonEmptyPrimitive(value) ? (typeof value === "string" ? value.trim() : value) : undefined;
+  }
+
+  if (Array.isArray(value)) {
+    const cleaned = value
+      .map((item) => sanitizeTemplateValue(item, depth - 1))
+      .filter((item) => item !== undefined);
+
+    return cleaned.length ? cleaned.slice(0, 12) : undefined;
+  }
+
+  if (!isPlainObject(value)) return undefined;
+
+  const out: Record<string, any> = {};
+  for (const key of Object.keys(value)) {
+    if (TECHNICAL_KEYS.has(key)) continue;
+    const cleaned = sanitizeTemplateValue(value[key], depth - 1);
+    if (cleaned !== undefined) out[key] = cleaned;
+  }
+
+  return Object.keys(out).length ? out : undefined;
+}
+
+function buildRecipientDisplayName(
+  recipient: PickedRecipientInput,
+  data: Record<string, any>,
+) {
+  const nome = typeof data.nome === "string" ? data.nome.trim() : "";
+  const cognome = typeof data.cognome === "string" ? data.cognome.trim() : "";
+  const fullName = [nome, cognome].filter(Boolean).join(" ").trim();
+
+  return (
+    fullName ||
+    (typeof data.ragioneSociale === "string" ? data.ragioneSociale.trim() : "") ||
+    (typeof data.denominazione === "string" ? data.denominazione.trim() : "") ||
+    (typeof data.nome === "string" ? data.nome.trim() : "") ||
+    (typeof recipient.label === "string" ? recipient.label.trim() : "") ||
+    ""
+  );
+}
+
+function buildTopLevelTemplateVars(args: {
+  recipient: PickedRecipientInput;
+  sanitizedData: Record<string, any>;
+  sanitizedRelated: Array<{ typeSlug: string; id: string; data: Record<string, any> }>;
+  chosenEmail: string;
+  allEmails: string[];
+}) {
+  const { recipient, sanitizedData, sanitizedRelated, chosenEmail, allEmails } = args;
+  const out: Record<string, any> = {};
+
+  for (const [key, value] of Object.entries(sanitizedData)) {
+    if (RESERVED_TOP_LEVEL_KEYS.has(key)) continue;
+    out[key] = value;
+  }
+
+  const displayName = buildRecipientDisplayName(recipient, sanitizedData);
+  if (displayName) {
+    out.name = displayName;
+    out.recipientName = displayName;
+  }
+
+  if (chosenEmail) {
+    out.email = chosenEmail;
+    out.recipientEmail = chosenEmail;
+  }
+
+  if (allEmails.length) out.emailsAll = allEmails;
+
+  out.anagraficaType = recipient.typeSlug;
+  out.anagraficaId = recipient.id;
+  out.anagraficaLabel = recipient.label;
+  out.anagraficheCorrelate = sanitizedRelated;
+
+  return out;
+}
+
 export function buildRecipientVars(recipient: PickedRecipientInput | null) {
   if (!recipient) return {};
 
@@ -130,8 +224,33 @@ export function buildRecipientVars(recipient: PickedRecipientInput | null) {
   )
     .map((email) => String(email || "").trim())
     .filter(Boolean);
+  const templateData = (sanitizeTemplateValue(recipient.data, 4) ?? {}) as Record<string, any>;
+  const sanitizedData = sanitizeMailData(templateData, 24);
+  const templateRelated = (recipient.related || [])
+    .map((node) => ({
+      typeSlug: node.typeSlug,
+      id: node.id,
+      data: (sanitizeTemplateValue(node.data, 3) ?? {}) as Record<string, any>,
+    }))
+    .filter((node) => Object.keys(node.data || {}).length > 0)
+    .slice(0, 6);
+  const sanitizedRelated = templateRelated
+    .map((node) => ({
+      typeSlug: node.typeSlug,
+      id: node.id,
+      data: sanitizeMailData(node.data, 12),
+    }))
+    .filter((node) => Object.keys(node.data || {}).length > 0)
+    .slice(0, 6);
 
   return {
+    ...buildTopLevelTemplateVars({
+      recipient,
+      sanitizedData,
+      sanitizedRelated,
+      chosenEmail,
+      allEmails,
+    }),
     recipient: {
       scope: recipient.scope,
       email: chosenEmail || null,
@@ -141,17 +260,50 @@ export function buildRecipientVars(recipient: PickedRecipientInput | null) {
       type: recipient.typeSlug,
       id: recipient.id,
       label: recipient.label,
-      data: sanitizeMailData(recipient.data, 10),
-      related: (recipient.related || [])
-        .map((node) => ({
-          typeSlug: node.typeSlug,
-          id: node.id,
-          data: sanitizeMailData(node.data, 6),
-        }))
-        .filter((node) => Object.keys(node.data || {}).length > 0)
-        .slice(0, 4),
+      email: chosenEmail || null,
+      emailsAll: allEmails,
+      ...templateData,
+      data: templateData,
+      related: templateRelated,
+    },
+    Anagrafica: {
+      type: recipient.typeSlug,
+      id: recipient.id,
+      label: recipient.label,
+      email: chosenEmail || null,
+      emailsAll: allEmails,
+      ...templateData,
+      data: templateData,
+      related: templateRelated,
     },
   };
+}
+
+export function stripRecipientVars(vars: Record<string, any>) {
+  if (!isPlainObject(vars)) return {};
+
+  const next = { ...vars };
+  const previousAnagrafica = isPlainObject(next.anagrafica) ? next.anagrafica : {};
+  const previousData = isPlainObject(previousAnagrafica.data) ? previousAnagrafica.data : {};
+
+  delete next.recipient;
+  delete next.anagrafica;
+  delete next.Anagrafica;
+  delete next.name;
+  delete next.email;
+  delete next.recipientName;
+  delete next.recipientEmail;
+  delete next.emailsAll;
+  delete next.anagraficaType;
+  delete next.anagraficaId;
+  delete next.anagraficaLabel;
+  delete next.anagraficheCorrelate;
+
+  for (const key of Object.keys(previousData)) {
+    delete next[key];
+  }
+
+  return next;
 }
 
 function sanitizeComposeValue(value: any, depth: number): any {

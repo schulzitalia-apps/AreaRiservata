@@ -49,6 +49,7 @@ export async function getUserMailBootstrap(role: string) {
       key: t.key,
       name: t.name,
       subject: t.subject,
+      html: t.html,
       description: t.description || "",
     })),
   };

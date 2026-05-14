@@ -1,7 +1,7 @@
 // src/components/Admin/MailAdminPanel.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ROLES, AppRole } from "@/types/roles";
 import { cn } from "@/server-utils/lib/utils";
 import { getEventiList } from "@/config/eventi.registry";
@@ -103,6 +103,25 @@ type MailTemplate = {
   description?: string;
 
   eventAuto?: MailEventAutoConfig;
+};
+
+type TemplatePlaceholderRow = {
+  path: string;
+  label: string;
+  fieldKey: string;
+  fieldType: string;
+  hint?: string;
+  sources?: string[];
+};
+
+type TemplateVarsCatalog = {
+  ok: true;
+  common: TemplatePlaceholderRow[];
+  byType: Array<{
+    slug: string;
+    label: string;
+    placeholders: TemplatePlaceholderRow[];
+  }>;
 };
 
 type EventDataField = {
@@ -246,6 +265,18 @@ function safeParseInlineJson(input: string): { ok: true; value: any } | { ok: fa
   }
 }
 
+function insertAtCursor(
+  current: string,
+  token: string,
+  input: HTMLInputElement | HTMLTextAreaElement | null,
+) {
+  if (!input) return `${current}${token}`;
+
+  const start = input.selectionStart ?? current.length;
+  const end = input.selectionEnd ?? current.length;
+  return `${current.slice(0, start)}${token}${current.slice(end)}`;
+}
+
 export default function MailAdminPanel() {
   const [avviso, setAvviso] = useState<Avviso>(null);
 
@@ -269,6 +300,10 @@ export default function MailAdminPanel() {
     () => templates.find((t) => t._id === selectedTemplateId) || null,
     [templates, selectedTemplateId]
   );
+  const [templateVarsCatalog, setTemplateVarsCatalog] = useState<TemplateVarsCatalog | null>(null);
+  const [templateVarsQuery, setTemplateVarsQuery] = useState("");
+  const subjectInputRef = useRef<HTMLInputElement | null>(null);
+  const htmlTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // ✅ form guidato preset evento
   const [eventPresetDraft, setEventPresetDraft] = useState<Record<string, any>>({});
@@ -327,6 +362,17 @@ export default function MailAdminPanel() {
 
   useEffect(() => {
     reloadAll();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const json = await jsonFetch("/api/admin/mail/template-vars");
+        setTemplateVarsCatalog(json as TemplateVarsCatalog);
+      } catch {
+        setTemplateVarsCatalog(null);
+      }
+    })();
   }, []);
 
   const policyByRole = useMemo(() => {
@@ -553,6 +599,38 @@ export default function MailAdminPanel() {
     // se ho campi dal catalogo uso quelli, altrimenti uso quelli custom che l’utente crea al volo
     return selectedEventoFields.length > 0 ? selectedEventoFields : customFieldDefs;
   }, [selectedEventoFields, customFieldDefs]);
+
+  const filteredTemplateVars = useMemo(() => {
+    const q = templateVarsQuery.trim().toLowerCase();
+    const source = templateVarsCatalog?.common || [];
+    if (!q) return source;
+    return source.filter((row) =>
+      `${row.path} ${row.label} ${row.fieldKey} ${row.fieldType} ${(row.sources || []).join(" ")}`
+        .toLowerCase()
+        .includes(q),
+    );
+  }, [templateVarsCatalog, templateVarsQuery]);
+
+  function insertPlaceholderIntoTemplate(target: "subject" | "html", path: string) {
+    if (!selectedTemplate) return;
+
+    const token = `{{${path}}}`;
+    const currentValue = target === "subject" ? selectedTemplate.subject : selectedTemplate.html;
+    const field = target === "subject" ? subjectInputRef.current : htmlTextareaRef.current;
+    const nextValue = insertAtCursor(currentValue || "", token, field);
+
+    setTemplates((prev) =>
+      prev.map((t) => (t._id === selectedTemplate._id ? { ...t, [target]: nextValue } : t))
+    );
+
+    requestAnimationFrame(() => {
+      const nextField = target === "subject" ? subjectInputRef.current : htmlTextareaRef.current;
+      if (!nextField) return;
+      const cursor = (nextField.selectionStart ?? currentValue.length) + token.length;
+      nextField.focus();
+      nextField.setSelectionRange(cursor, cursor);
+    });
+  }
 
   function updatePresetValue(key: string, value: any) {
     setEventPresetDraft((prev) => ({ ...prev, [key]: value }));
@@ -1080,6 +1158,7 @@ export default function MailAdminPanel() {
                   <label className="block text-xs text-dark dark:text-white">
                     Oggetto
                     <input
+                      ref={subjectInputRef}
                       className="mt-1 w-full rounded-md border border-stroke bg-transparent px-2 py-1.5 text-xs dark:border-dark-3"
                       value={selectedTemplate.subject}
                       onChange={(e) =>
@@ -1094,6 +1173,7 @@ export default function MailAdminPanel() {
                   <label className="block text-xs text-dark dark:text-white">
                     HTML
                     <textarea
+                      ref={htmlTextareaRef}
                       className="mt-1 min-h-[260px] w-full rounded-md border border-stroke bg-transparent px-2 py-1.5 font-mono text-[11px] dark:border-dark-3"
                       value={selectedTemplate.html}
                       onChange={(e) =>
@@ -1104,6 +1184,82 @@ export default function MailAdminPanel() {
                       onBlur={() => patchTemplate(selectedTemplate._id, { html: selectedTemplate.html })}
                     />
                   </label>
+
+                  <div className="rounded-md border border-stroke p-3 dark:border-dark-3">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <div>
+                        <div className="text-xs font-semibold text-dark dark:text-white">
+                          Placeholder anagrafiche
+                        </div>
+                        <div className="mt-1 text-[11px] text-dark/60 dark:text-white/60">
+                          Campi letti dal registry. Inseriscili in modo sicuro come <span className="font-mono">{"{{anagrafica.campo}}"}</span>.
+                        </div>
+                      </div>
+
+                      <input
+                        className="w-full rounded-md border border-stroke bg-transparent px-2 py-1.5 text-xs md:max-w-[260px] dark:border-dark-3"
+                        value={templateVarsQuery}
+                        onChange={(e) => setTemplateVarsQuery(e.target.value)}
+                        placeholder="Cerca campo, label o tipo..."
+                      />
+                    </div>
+
+                    <div className="mt-3 grid gap-2 md:grid-cols-2">
+                      {filteredTemplateVars.slice(0, 24).map((row) => (
+                        <div
+                          key={row.path}
+                          className="rounded-md border border-stroke/80 bg-gray-1/30 p-3 dark:border-dark-3/80 dark:bg-dark-2/30"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="truncate text-[11px] font-semibold text-dark dark:text-white">
+                                {row.label}
+                              </div>
+                              <div className="mt-1 break-all font-mono text-[11px] text-primary">
+                                {`{{${row.path}}}`}
+                              </div>
+                            </div>
+                            <span className="rounded-full border border-stroke px-2 py-0.5 text-[10px] text-dark/55 dark:border-dark-3 dark:text-white/55">
+                              {row.fieldType}
+                            </span>
+                          </div>
+
+                          {row.hint ? (
+                            <div className="mt-2 text-[10px] leading-4 text-dark/60 dark:text-white/60">
+                              {row.hint}
+                            </div>
+                          ) : null}
+
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => insertPlaceholderIntoTemplate("subject", row.path)}
+                              className="rounded-md border border-stroke px-2 py-1 text-[11px] font-semibold text-dark hover:bg-gray-2 dark:border-dark-3 dark:text-white dark:hover:bg-dark-2"
+                            >
+                              Inserisci in oggetto
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => insertPlaceholderIntoTemplate("html", row.path)}
+                              className="rounded-md border border-primary/30 px-2 py-1 text-[11px] font-semibold text-primary hover:bg-primary/5"
+                            >
+                              Inserisci nel corpo
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {filteredTemplateVars.length === 0 ? (
+                      <div className="mt-3 text-[11px] text-dark/60 dark:text-white/60">
+                        Nessun placeholder trovato con questo filtro.
+                      </div>
+                    ) : null}
+
+                    <div className="mt-3 text-[11px] text-dark/60 dark:text-white/60">
+                      Mostrati {Math.min(filteredTemplateVars.length, 24)} placeholder su {filteredTemplateVars.length}.
+                    </div>
+                  </div>
 
                   {/* EVENTO COLLEGATO */}
                   <div className="rounded-md border border-stroke p-3 dark:border-dark-3">

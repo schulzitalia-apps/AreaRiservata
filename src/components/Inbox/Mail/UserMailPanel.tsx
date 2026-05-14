@@ -11,7 +11,7 @@ import TemplateList, { MailTemplateLite } from "./TemplateList";
 import MailComposer, { SenderOption } from "./MailComposer";
 import MailPreview from "./MailPreview";
 import RecipientPickerModal, { PickedRecipient } from "./RecipientPickerModal";
-import { buildRecipientVars, sanitizeVarsForCompose } from "./utils/mailContext";
+import { buildRecipientVars, sanitizeVarsForCompose, stripRecipientVars } from "./utils/mailContext";
 
 type Avviso = { tipo: "successo" | "errore" | "info"; testo: string } | null;
 
@@ -134,6 +134,34 @@ function renderTemplateString(input: any, vars: Record<string, any>) {
   });
 }
 
+function extractTemplatePath(expression: string) {
+  return String(expression || "").split("|")[0]?.trim() || "";
+}
+
+function stringifyKnownTemplateValue(value: any): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed ? trimmed : undefined;
+  }
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) {
+    const cleaned = value
+      .map((item) => stringifyKnownTemplateValue(item))
+      .filter(Boolean);
+    return cleaned.length ? cleaned.join(", ") : undefined;
+  }
+  return undefined;
+}
+
+function renderTemplateStringPartial(input: string, vars: Record<string, any>) {
+  return input.replace(/\{\{\{?\s*([^}]+?)\s*\}?\}\}/g, (match, expr) => {
+    const path = extractTemplatePath(String(expr));
+    const value = stringifyKnownTemplateValue(getByPath(vars, path));
+    return value ?? match;
+  });
+}
+
 function renderPresetDeep(input: any, vars: Record<string, any>): any {
   if (Array.isArray(input)) return input.map((x) => renderPresetDeep(x, vars));
   if (isPlainObject(input)) {
@@ -170,14 +198,11 @@ type BootstrapResponse = {
   templates: Array<MailTemplateLite & { eventAuto?: MailEventAutoConfig }>;
 };
 
-type PreviewResponse = {
-  ok: true;
-  subject: string;
-  html: string;
-};
-
 type ComposeResponse = {
   ok: true;
+  suggestion?: {
+    vars?: Record<string, any>;
+  };
   rendered: {
     subject: string;
     html: string;
@@ -210,6 +235,62 @@ function suggestSenderIdFromEmails(emails: string[], senderOptions: SenderOption
 
 type DraftMode = "auto" | "generated" | "manual";
 type Draft = { subject: string; html: string; bodyText: string };
+const EMPTY_DRAFT: Draft = { subject: "", html: "", bodyText: "" };
+
+function buildDraftFromTemplate(template: { subject?: string; html?: string } | null): Draft {
+  const subject = template?.subject || "";
+  const html = template?.html || "";
+  return {
+    subject,
+    html,
+    bodyText: htmlToText(html),
+  };
+}
+
+function applyTemplateDraft(template: { subject?: string; html?: string } | null, vars: Record<string, any>) {
+  if (!template) return EMPTY_DRAFT;
+
+  const subject = renderTemplateStringPartial(template.subject || "", vars || {});
+  const html = renderTemplateStringPartial(template.html || "", vars || {});
+
+  return {
+    subject: subject || template.subject || "",
+    html: html || template.html || "",
+    bodyText: htmlToText(html || template.html || ""),
+  };
+}
+
+function extractTemplatePlaceholders(template: { subject?: string; html?: string } | null) {
+  if (!template) return [];
+
+  const matches =
+    `${template.subject || ""}\n${template.html || ""}`.match(/\{\{\{?\s*([^}]+?)\s*\}?\}\}/g) || [];
+  const refs = new Set<string>();
+
+  for (const match of matches) {
+    const inner = match.replace(/^\{\{\{?\s*/, "").replace(/\s*\}?\}\}$/, "");
+    const path = extractTemplatePath(inner);
+    if (path) refs.add(path);
+  }
+
+  return Array.from(refs);
+}
+
+function SummaryBox(props: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="rounded-2xl border border-stroke/80 bg-white px-4 py-3 dark:border-dark-3/80 dark:bg-gray-dark">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dark/45 dark:text-white/45">
+        {props.label}
+      </div>
+      <div className="mt-2 truncate text-sm font-semibold text-dark dark:text-white">
+        {props.value}
+      </div>
+      {props.hint ? (
+        <div className="mt-1 text-xs text-dark/60 dark:text-white/60">{props.hint}</div>
+      ) : null}
+    </div>
+  );
+}
 
 export default function UserMailPanel() {
   const params = useSearchParams();
@@ -234,17 +315,26 @@ export default function UserMailPanel() {
   const [ccRecipients, setCcRecipients] = useState<CcRecipient[]>([]);
   const [vars, setVars] = useState<Record<string, any>>({});
   const [draftMode, setDraftMode] = useState<DraftMode>("auto");
-  const [draft, setDraft] = useState<Draft>({ subject: "", html: "", bodyText: "" });
+  const [autoDraft, setAutoDraft] = useState<Draft>(EMPTY_DRAFT);
+  const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
+  const [aiSuggestedVars, setAiSuggestedVars] = useState<Record<string, any>>({});
   const [composing, setComposing] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [lastSentMessage, setLastSentMessage] = useState("");
+  const visibleDraft = draftMode === "auto" ? autoDraft : draft;
 
-  const draftRef = useRef(draft);
+  const draftRef = useRef(visibleDraft);
   useEffect(() => {
-    draftRef.current = draft;
-  }, [draft]);
+    draftRef.current = visibleDraft;
+  }, [visibleDraft]);
 
   const selectedTemplate = useMemo(
     () => templates.find((t) => t.key === selectedKey) || null,
     [templates, selectedKey],
+  );
+  const templatePlaceholders = useMemo(
+    () => extractTemplatePlaceholders(selectedTemplate),
+    [selectedTemplate],
   );
 
   useEffect(() => {
@@ -252,6 +342,12 @@ export default function UserMailPanel() {
     const t = setTimeout(() => setAvviso(null), 4000);
     return () => clearTimeout(t);
   }, [avviso]);
+
+  useEffect(() => {
+    if (!lastSentMessage) return;
+    const t = setTimeout(() => setLastSentMessage(""), 4500);
+    return () => clearTimeout(t);
+  }, [lastSentMessage]);
 
   useEffect(() => {
     (async () => {
@@ -264,8 +360,8 @@ export default function UserMailPanel() {
         setSenderOptions(Array.isArray(data.senderOptions) ? data.senderOptions : []);
         setDefaultSenderIdentityId(data.defaultSenderIdentityId);
 
-        const initialKey = initialTemplateKey || data.templates?.[0]?.key;
-        setSelectedKey((prev) => prev || initialKey);
+        const initialKey = initialTemplateKey || undefined;
+        setSelectedKey((prev) => prev ?? initialKey);
 
         const firstSender = data.senderOptions?.[0]?.id || "";
         const initialSender = data.defaultSenderIdentityId || firstSender;
@@ -279,45 +375,29 @@ export default function UserMailPanel() {
   }, [initialTemplateKey]);
 
   useEffect(() => {
-    if (!selectedKey) return;
     const sp = new URLSearchParams(Array.from(params.entries()));
-    sp.set("template", selectedKey);
+    if (selectedKey) sp.set("template", selectedKey);
+    else sp.delete("template");
     router.replace(`?${sp.toString()}`);
   }, [params, router, selectedKey]);
 
   useEffect(() => {
-    setDraftMode("auto");
-    setDraft({ subject: "", html: "", bodyText: "" });
-  }, [selectedKey, pickedRecipient?.id, pickedRecipient?.typeSlug]);
-
-  useEffect(() => {
-    if (!selectedKey || !mailEnabled) {
-      setDraft({ subject: "", html: "", bodyText: "" });
+    if (!selectedTemplate) {
+      setAutoDraft(EMPTY_DRAFT);
       return;
     }
 
-    const t = setTimeout(async () => {
-      try {
-        const res = await jsonFetch<PreviewResponse>("/api/mail/preview", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ templateKey: selectedKey, vars }),
-        });
+    const hasRecipientContext = !!(
+      (vars?.recipient && Object.keys(vars.recipient || {}).length) ||
+      (vars?.anagrafica && Object.keys(vars.anagrafica || {}).length)
+    );
 
-        if (draftMode !== "auto") return;
-        setDraft({
-          subject: res.subject || "",
-          html: res.html || "",
-          bodyText: htmlToText(res.html || ""),
-        });
-      } catch {
-        if (draftMode !== "auto") return;
-        setDraft({ subject: "", html: "", bodyText: "" });
-      }
-    }, 350);
-
-    return () => clearTimeout(t);
-  }, [selectedKey, mailEnabled, vars, draftMode]);
+    setAutoDraft(
+      hasRecipientContext
+        ? applyTemplateDraft(selectedTemplate, vars || {})
+        : buildDraftFromTemplate(selectedTemplate),
+    );
+  }, [selectedTemplate, vars]);
 
   async function maybeCreateAutoEventoAfterSend() {
     const ev = selectedTemplate?.eventAuto;
@@ -404,7 +484,6 @@ export default function UserMailPanel() {
   async function onSend() {
     if (!mailEnabled) return setAvviso({ tipo: "errore", testo: "Sistema mail disabilitato." });
     if (!canSend) return setAvviso({ tipo: "errore", testo: "Invio non consentito per il tuo ruolo." });
-    if (!selectedKey) return setAvviso({ tipo: "errore", testo: "Seleziona un template." });
 
     const toEmail = to.trim();
     if (!toEmail) return setAvviso({ tipo: "errore", testo: "Inserisci un destinatario." });
@@ -416,17 +495,19 @@ export default function UserMailPanel() {
     const subjectToSend = (draftRef.current.subject || "").trim();
     const htmlToSend = (draftRef.current.html || "").trim();
     if (!subjectToSend && !htmlToSend) {
-      return setAvviso({ tipo: "errore", testo: "La bozza e vuota." });
+      return setAvviso({ tipo: "errore", testo: "Scrivi almeno oggetto o corpo prima di inviare." });
     }
 
     try {
+      setSending(true);
+      setAvviso({ tipo: "info", testo: "Invio della mail in corso..." });
       const r: any = await jsonFetch("/api/mail/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           to: toEmail,
           cc: ccRecipients.map((item) => item.email),
-          templateKey: selectedKey,
+          templateKey: selectedKey || undefined,
           vars,
           senderIdentityId: finalSenderId,
           subjectOverride: subjectToSend || undefined,
@@ -438,10 +519,13 @@ export default function UserMailPanel() {
         tipo: "successo",
         testo: r?.messageId ? `Email inviata. (id: ${r.messageId})` : "Email inviata.",
       });
+      setLastSentMessage(r?.messageId ? `Invio completato. ID: ${r.messageId}` : "Invio completato con successo.");
 
       await maybeCreateAutoEventoAfterSend();
     } catch (e: any) {
       setAvviso({ tipo: "errore", testo: e?.message || "Errore invio email" });
+    } finally {
+      setSending(false);
     }
   }
 
@@ -471,6 +555,7 @@ export default function UserMailPanel() {
         html: newHtml,
         bodyText: htmlToText(newHtml),
       });
+      setAiSuggestedVars(res?.suggestion?.vars || {});
       setDraftMode("generated");
       setAvviso({ tipo: "successo", testo: "Bozza generata." });
     } catch (e: any) {
@@ -482,6 +567,7 @@ export default function UserMailPanel() {
 
   function handlePickRecipient(p: PickedRecipient) {
     setPickedRecipient(p);
+    setAiSuggestedVars({});
 
     const chosenEmail = (p.emails?.[0] || "").trim();
     if (chosenEmail) setTo(chosenEmail);
@@ -491,7 +577,7 @@ export default function UserMailPanel() {
     if (suggestedSenderId) setSenderIdentityId(suggestedSenderId);
 
     setVars((prev) => ({
-      ...(prev || {}),
+      ...stripRecipientVars(prev || {}),
       ...buildRecipientVars({
         ...p,
         scope: "ANAGRAFICA",
@@ -525,6 +611,28 @@ export default function UserMailPanel() {
     });
   }
 
+  function startBlankDraft() {
+    setSelectedKey(undefined);
+    setAutoDraft(EMPTY_DRAFT);
+    setDraftMode("manual");
+    setDraft(EMPTY_DRAFT);
+    setAiSuggestedVars({});
+  }
+
+  function resetDraftFromActiveTemplate() {
+    if (!selectedTemplate && !selectedKey) return;
+    setAiSuggestedVars({});
+    setDraftMode("auto");
+  }
+
+  function detachCurrentDraftFromTemplate() {
+    setDraftMode("manual");
+    setDraft(visibleDraft);
+    setSelectedKey(undefined);
+    setAutoDraft(EMPTY_DRAFT);
+    setAiSuggestedVars({});
+  }
+
   if (loading) {
     return (
       <div className="rounded-[28px] border border-stroke/80 bg-white p-5 shadow-1 dark:border-dark-3/80 dark:bg-gray-dark dark:shadow-card">
@@ -541,26 +649,63 @@ export default function UserMailPanel() {
     ? { label: pickedRecipient.label, meta: pickedRecipient.typeSlug }
     : null;
 
-  const disabledComposer = !mailEnabled || !canSend || !selectedKey;
-  const hardDisabledCtas = disabledComposer || composing;
+  const hasTemplate = !!selectedTemplate;
+  const hasPrimaryRecipient = !!pickedRecipient || !!to.trim();
+  const hasDraftOutput =
+    !!visibleDraft.subject.trim() || !!visibleDraft.bodyText.trim() || !!visibleDraft.html.trim();
+  const canGenerateDraft = hasTemplate && mailEnabled;
+  const canSendNow = mailEnabled && canSend && !!to.trim() && hasDraftOutput;
+  const selectedTemplateSummary = selectedTemplate?.name || "Scrittura libera";
+  const recipientSummary = pickedRecipient?.label || to.trim() || "Da definire";
+  const draftSummary =
+    draftMode === "generated"
+      ? "Generata con AI"
+      : draftMode === "manual"
+        ? "Manuale"
+        : hasDraftOutput
+          ? "Da template"
+          : "Vuota";
+
+  const disabledComposer = !mailEnabled;
 
   return (
     <div className="w-full overflow-hidden rounded-[28px] border border-stroke/80 bg-white shadow-1 dark:border-dark-3/80 dark:bg-gray-dark dark:shadow-card">
+      {sending ? (
+        <div className="border-b border-blue-500/40 bg-blue-50 px-5 py-3 text-sm font-semibold text-blue-800 dark:bg-blue-900/20 dark:text-blue-100">
+          Invio della mail in corso...
+        </div>
+      ) : null}
+      {!sending && lastSentMessage ? (
+        <div className="border-b border-green-500/40 bg-green-50 px-5 py-3 text-sm font-semibold text-green-800 dark:bg-green-900/20 dark:text-green-100">
+          {lastSentMessage}
+        </div>
+      ) : null}
       <div className="border-b border-stroke/80 px-5 py-5 dark:border-dark-3/80">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-2xl font-bold text-dark dark:text-white">Composizione mail</h2>
             <div className="mt-1 text-sm text-dark/60 dark:text-white/60">
-              Seleziona un template, scegli il destinatario e modifica liberamente il testo.
+              Template, anagrafica e AI sono strumenti opzionali. La bozza resta sempre al centro e puoi lavorare anche in modo totalmente manuale.
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={startBlankDraft}
+              className="rounded-xl border border-stroke px-3 py-2 text-xs font-semibold text-dark transition hover:bg-gray-1 dark:border-dark-3 dark:text-white dark:hover:bg-dark-2"
+            >
+              Nuova mail libera
+            </button>
             {selectedTemplate ? (
-              <span className="rounded-full border border-stroke px-3 py-1 text-xs font-semibold text-dark/70 dark:border-dark-3 dark:text-white/70">
+              <span className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-semibold text-primary">
                 {selectedTemplate.name}
               </span>
-            ) : null}
+            ) : (
+              <span className="rounded-full border border-stroke px-3 py-1 text-xs font-semibold text-dark/60 dark:border-dark-3 dark:text-white/60">
+                Nessun template
+              </span>
+            )}
             {!mailEnabled ? (
               <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700 dark:bg-red-500/15 dark:text-red-200">
                 Mail off
@@ -573,14 +718,59 @@ export default function UserMailPanel() {
       <div className="px-5 pb-5 pt-4">
         <InlineAlert avviso={avviso} onClose={() => setAvviso(null)} />
 
-        <div className="flex min-h-[60vh] gap-0">
-          <section className="flex flex-1 flex-col gap-4 pr-0 lg:pr-5">
+        <div className="mb-5 grid gap-3 md:grid-cols-3">
+          <SummaryBox
+            label="Template"
+            value={selectedTemplateSummary}
+            hint={hasTemplate ? selectedTemplate?.key : "Facoltativo"}
+          />
+          <SummaryBox
+            label="Destinatario"
+            value={recipientSummary}
+            hint={hasPrimaryRecipient ? "Pronto per la bozza" : "Inseriscilo a mano o cercalo in anagrafiche"}
+          />
+          <SummaryBox
+            label="Stato bozza"
+            value={draftSummary}
+            hint={
+              hasTemplate
+                ? "Cambio template e dati aggiornano subito soggetto e corpo"
+                : "Puoi scrivere e inviare anche senza template"
+            }
+          />
+        </div>
+
+        <div className="grid min-h-[60vh] gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
+          <aside className="space-y-4 xl:sticky xl:top-6 xl:self-start">
+            <TemplateList
+              items={templates as any}
+              selectedKey={selectedKey}
+              onSelect={(k) => {
+                setSelectedKey(k);
+                setDraftMode("auto");
+                setDraft(EMPTY_DRAFT);
+                setAiSuggestedVars({});
+              }}
+              onStartBlank={startBlankDraft}
+              onClearSelection={detachCurrentDraftFromTemplate}
+              variant="panel"
+            />
+
+            <div className="rounded-2xl border border-stroke/80 bg-white p-4 dark:border-dark-3/80 dark:bg-gray-dark">
+              <div className="text-sm font-semibold text-dark dark:text-white">Uso consigliato</div>
+              <div className="mt-2 space-y-2 text-xs leading-5 text-dark/60 dark:text-white/60">
+                <p>Se scegli un template, oggetto e corpo si allineano subito al modello attivo.</p>
+                <p>Se scegli un&apos;anagrafica, le email correlate e le variabili sanificate aiutano la compilazione AI.</p>
+                <p>Se preferisci, puoi saltare tutto e scrivere una mail manuale da zero.</p>
+              </div>
+            </div>
+          </aside>
+
+          <section className="flex flex-col gap-4">
             <MailComposer
               disabled={disabledComposer}
               to={to}
               onChangeTo={(v) => {
-                setDraftMode("auto");
-                setDraft({ subject: "", html: "", bodyText: "" });
                 setTo(v);
               }}
               ccRecipients={ccRecipients.map((item) => ({
@@ -600,79 +790,88 @@ export default function UserMailPanel() {
               recipientPill={recipientPill}
               onClearRecipient={() => {
                 setPickedRecipient(null);
-                setVars((prev) => {
-                  const next = { ...(prev || {}) };
-                  delete next.recipient;
-                  delete next.anagrafica;
-                  return next;
-                });
-                setDraftMode("auto");
-                setDraft({ subject: "", html: "", bodyText: "" });
+                setVars((prev) => stripRecipientVars(prev || {}));
+                setAiSuggestedVars({});
               }}
             />
 
             <MailPreview
               templateKey={selectedTemplate?.key || ""}
-              subject={draft.subject}
-              bodyText={draft.bodyText}
+              templateLabel={selectedTemplate?.name || ""}
+              subject={visibleDraft.subject}
+              bodyText={visibleDraft.bodyText}
+              placeholderRefs={templatePlaceholders}
+              suggestedVars={aiSuggestedVars}
+              draftMode={draftMode}
               disabled={!mailEnabled}
-              hint={!selectedKey ? "Seleziona un template a destra." : "Il testo del template comparira qui automaticamente."}
+              hint={
+                hasTemplate
+                  ? "Seleziona un template o genera con AI per riempire la bozza."
+                  : "Nessun template attivo. Puoi scrivere la mail manualmente oppure scegliere un template a sinistra."
+              }
+              onGenerate={onCompose}
+              generateDisabled={!canGenerateDraft || composing}
+              onResetTemplate={resetDraftFromActiveTemplate}
+              canResetTemplate={hasTemplate}
+              onClearDraft={() => {
+                setDraftMode("manual");
+                setDraft(EMPTY_DRAFT);
+              }}
+              composing={composing}
               onChangeSubject={(v) => {
                 setDraftMode("manual");
-                setDraft((prev) => ({ ...prev, subject: v }));
+                setDraft((prev) => ({ ...(draftMode === "auto" ? visibleDraft : prev), subject: v }));
               }}
               onChangeBodyText={(v) => {
                 setDraftMode("manual");
                 setDraft((prev) => ({
-                  ...prev,
+                  ...(draftMode === "auto" ? visibleDraft : prev),
                   bodyText: v,
                   html: textToSimpleHtml(v),
                 }));
               }}
             />
 
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-stroke/80 px-4 py-4 dark:border-dark-3/80">
-              <div className="text-xs text-dark/60 dark:text-white/60">
-                La mail inviata usera esattamente questo testo.
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={onCompose}
-                  disabled={hardDisabledCtas}
-                  className={cn(
-                    "rounded-xl border px-4 py-2 text-sm font-semibold transition",
-                    "border-primary/30 text-primary hover:bg-primary/5",
-                    hardDisabledCtas && "cursor-not-allowed opacity-60",
-                  )}
-                >
-                  {composing ? "Genero..." : "Genera bozza"}
-                </button>
+            <div className="rounded-[24px] border border-stroke/80 bg-white p-5 dark:border-dark-3/80 dark:bg-gray-dark">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-lg font-semibold text-dark dark:text-white">Invio finale</div>
+                  <div className="mt-1 text-sm text-dark/60 dark:text-white/60">
+                    Controlla destinatario, copie e testo finale. Se non usi un template, verra inviata esattamente la bozza che vedi sopra.
+                  </div>
+                </div>
 
                 <button
                   onClick={onSend}
-                  disabled={hardDisabledCtas}
+                  disabled={!canSendNow || composing || sending}
                   className={cn(
                     "rounded-xl px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90",
-                    hardDisabledCtas ? "cursor-not-allowed bg-gray-400" : "bg-primary",
+                    !canSendNow || composing || sending ? "cursor-not-allowed bg-gray-400" : "bg-primary",
                   )}
                 >
-                  Invia
+                  {sending ? "Invio in corso..." : "Invia"}
                 </button>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                <SummaryBox
+                  label="A"
+                  value={to.trim() || "Non impostato"}
+                  hint={pickedRecipient?.label || "Destinatario principale"}
+                />
+                <SummaryBox
+                  label="CC"
+                  value={ccRecipients.length ? `${ccRecipients.length} selezionati` : "Nessuna copia"}
+                  hint="Le copie non modificano la generazione del testo"
+                />
+                <SummaryBox
+                  label="Bozza finale"
+                  value={hasDraftOutput ? "Pronta" : "Da compilare"}
+                  hint={canSend ? "La mail inviata usera esattamente questo testo" : "Il tuo ruolo non puo inviare"}
+                />
               </div>
             </div>
           </section>
-
-          <TemplateList
-            items={templates as any}
-            selectedKey={selectedKey}
-            onSelect={(k) => {
-              setSelectedKey(k);
-              setDraftMode("auto");
-              setDraft({ subject: "", html: "", bodyText: "" });
-            }}
-            className="hidden lg:block"
-          />
         </div>
       </div>
 
@@ -680,8 +879,6 @@ export default function UserMailPanel() {
         open={primaryRecipientOpen}
         onClose={() => setPrimaryRecipientOpen(false)}
         onPick={(p: any) => {
-          setDraftMode("auto");
-          setDraft({ subject: "", html: "", bodyText: "" });
           handlePickRecipient(p as PickedRecipient);
         }}
         mode="primary"

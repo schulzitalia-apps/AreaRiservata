@@ -100,13 +100,16 @@ export async function POST(req: NextRequest) {
   const htmlOverride =
     typeof body?.htmlOverride === "string" ? body.htmlOverride.trim() : "";
 
-  if (!recipients.length || !templateKey) {
+  if (!recipients.length) {
     return NextResponse.json({ ok: false, error: "MISSING_FIELDS" }, { status: 400 });
   }
 
-  const tpl = await MailTemplateModel.findOne({ key: templateKey, enabled: true }).lean();
-  if (!tpl) {
-    return NextResponse.json({ ok: false, error: "TEMPLATE_NOT_FOUND" }, { status: 404 });
+  let tpl: { subject: string; html: string } | null = null;
+  if (templateKey) {
+    tpl = await MailTemplateModel.findOne({ key: templateKey, enabled: true }).lean();
+    if (!tpl) {
+      return NextResponse.json({ ok: false, error: "TEMPLATE_NOT_FOUND" }, { status: 404 });
+    }
   }
 
   const cfg = parseEmailFromEnv(process.env.EMAIL_FROM);
@@ -132,8 +135,12 @@ export async function POST(req: NextRequest) {
 
   // ✅ se arriva override, usalo; altrimenti template
   // ✅ in entrambi i casi, renderTemplate con vars (se ci sono {{...}})
-  const subjectTpl = subjectOverride || tpl.subject;
-  const htmlTpl = htmlOverride || tpl.html;
+  const subjectTpl = subjectOverride || tpl?.subject || "";
+  const htmlTpl = htmlOverride || tpl?.html || "";
+
+  if (!subjectTpl && !htmlTpl) {
+    return NextResponse.json({ ok: false, error: "EMPTY_DRAFT" }, { status: 400 });
+  }
 
   const subject = renderTemplate(subjectTpl, vars) || subjectTpl;
   const html = renderTemplate(htmlTpl, vars) || htmlTpl;
